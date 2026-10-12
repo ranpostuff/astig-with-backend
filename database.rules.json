@@ -1,0 +1,85 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === true)",
+        ".write": "auth != null && auth.token.admin === true",
+        ".validate": "newData.hasChildren(['role']) && newData.child('role').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'teacher' || newData.child('role').val() === 'kiosk')"
+      }
+    },
+    "grades": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+      ".write": "auth != null && auth.token.admin === true",
+      ".indexOn": ["name"]
+    },
+    "sections": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+      ".write": "auth != null && auth.token.admin === true",
+      ".indexOn": ["name", "gradeId", "assignedTeacherId"]
+    },
+    "students": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+      "$lrn": {
+        ".write": "auth != null && auth.token.admin === true",
+        ".validate": "!newData.exists() || (newData.hasChildren(['lrn','firstName','lastName','sectionId','sectionName','gradeId','gradeName']) && newData.child('lrn').val() === $lrn && newData.child('lrn').isString() && newData.child('lrn').val().matches(/^\\d{12}$/))"
+      },
+      ".indexOn": ["lastName", "sectionId", "gradeId"]
+    },
+    "studentDirectory": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true || auth.token.kiosk === true)",
+      "$lrn": {
+        ".write": "auth != null && auth.token.admin === true",
+        ".validate": "!newData.exists() || (newData.hasChildren(['lrn','firstName','lastName','sectionId','sectionName','gradeId','gradeName']) && newData.child('lrn').val() === $lrn && !newData.child('parentName').exists() && newData.child('parentMobileNo').val() === '' && !newData.child('parentEmail').exists())"
+      },
+      ".indexOn": ["lastName", "sectionId", "gradeId"]
+    },
+    "attendance": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+      "$date": {
+        "$lrn": {
+          ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true || auth.token.kiosk === true)",
+          ".write": "auth != null && (auth.token.admin === true || auth.token.teacher === true || auth.token.kiosk === true)",
+          ".validate": "newData.hasChildren(['lrn','studentName','sectionId','entryAt','lastScanAt','status','late']) && newData.child('lrn').val() === $lrn && newData.child('entryAt').isNumber() && newData.child('entryAt').val() <= now + 120000 && newData.child('lastScanAt').isNumber() && newData.child('lastScanAt').val() <= now + 120000 && (newData.child('status').val() === 'ON_TIME' || newData.child('status').val() === 'LATE') && newData.child('late').isBoolean()"
+        }
+      }
+    },
+    "attendanceEvents": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+      "$eventId": {
+        ".write": "auth != null && (auth.token.admin === true || auth.token.teacher === true || auth.token.kiosk === true)",
+        ".validate": "newData.hasChildren(['lrn','action','occurredAt','source']) && (newData.child('action').val() === 'ENTRY' || newData.child('action').val() === 'EXIT') && newData.child('occurredAt').isNumber() && newData.child('occurredAt').val() <= now + 120000"
+      },
+      ".indexOn": ["lrn", "dateKey", "occurredAt", "sectionId"]
+    },
+    "violations": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+      "$lrn": {
+        "$violationId": {
+          ".write": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+          ".validate": "newData.hasChildren(['id','lrn','type','occurredAt','recordedByUid']) && newData.child('lrn').val() === $lrn && newData.child('recordedByUid').val() === auth.uid && newData.child('occurredAt').isNumber() && newData.child('occurredAt').val() <= now + 120000"
+        }
+      }
+    },
+    "violationEvents": {
+      ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+      "$violationId": {
+        ".write": "auth != null && (auth.token.admin === true || auth.token.teacher === true)",
+        ".validate": "newData.hasChildren(['id','lrn','type','occurredAt','recordedByUid']) && newData.child('id').val() === $violationId && newData.child('recordedByUid').val() === auth.uid"
+      },
+      ".indexOn": ["lrn", "sectionId", "occurredAt", "type"]
+    },
+    "scanSessions": {
+      "$code": {
+        ".read": "auth != null && (auth.token.admin === true || auth.token.teacher === true || auth.token.kiosk === true)",
+        ".write": "auth != null && (auth.token.admin === true || auth.token.teacher === true || auth.token.kiosk === true)",
+        ".validate": "!newData.exists() || (newData.child('code').val() === $code && $code.matches(/^[A-Z2-9]{6}$/))"
+      }
+    },
+    "settings": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.admin === true"
+    }
+  }
+}

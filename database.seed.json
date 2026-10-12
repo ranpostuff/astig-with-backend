@@ -1,0 +1,14 @@
+{
+  "settings": {
+    "schoolTimeZone": "Asia/Manila",
+    "lateCutoff": "07:15",
+    "violationTypes": {
+      "improper-uniform": "Improper uniform",
+      "no-school-id": "No school ID",
+      "cutting-classes": "Cutting classes",
+      "disruptive-behavior": "Disruptive behavior",
+      "prohibited-item": "Prohibited item",
+      "other": "Other"
+    }
+  }
+}
