@@ -16,6 +16,27 @@ const VIOLATION_TYPES = [
   "Other",
 ];
 
+function cameraErrorMessage(error: unknown) {
+  const detail = error instanceof Error
+    ? `${error.name}: ${error.message}`
+    : String(error);
+
+  if (/notallowed|permission|denied/i.test(detail)) {
+    return "Camera permission was denied. Allow camera access for this site in your browser settings, then reload the page.";
+  }
+  if (/notfound|devicesnotfound|no camera/i.test(detail)) {
+    return "No usable camera was found on this device.";
+  }
+  if (/notreadable|trackstart|could not start|in use/i.test(detail)) {
+    return "The camera is being used by another app. Close other camera apps and try again.";
+  }
+  if (/secure|https/i.test(detail)) {
+    return "Camera access requires a secure HTTPS page.";
+  }
+
+  return `Camera could not start: ${detail}`;
+}
+
 export function MobileScannerPage() {
   const [params] = useSearchParams();
   const { auth } = useAuth();
@@ -54,7 +75,9 @@ export function MobileScannerPage() {
       );
     } catch (error) {
       setRunning(false);
-      toastService.error(error);
+      const detail = cameraErrorMessage(error);
+      setMessage(detail);
+      toastService.error(new Error(detail));
     }
   }
 
