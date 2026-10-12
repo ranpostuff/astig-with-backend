@@ -72,7 +72,7 @@ export function StudentVerificationPage() {
 
   useEffect(() => {
     void trackingService.createScanSession(sessionCode);
-    return trackingService.subscribeScanSession(sessionCode, (session) => {
+    const unsubscribe = trackingService.subscribeScanSession(sessionCode, (session) => {
       const pending = session?.pendingScan as { id?: string; lrn?: string; mode?: string } | undefined;
       if (pending?.id && pending.lrn && pending.id !== handledRemoteId.current) {
         handledRemoteId.current = pending.id;
@@ -106,6 +106,10 @@ export function StudentVerificationPage() {
         resetSoon();
       }
     });
+    return () => {
+      unsubscribe();
+      void trackingService.closeScanSession(sessionCode);
+    };
   }, [processAttendance, resetSoon, sessionCode]);
 
   useEffect(() => {
@@ -162,7 +166,7 @@ export function StudentVerificationPage() {
             <CheckCircle2 className="mx-auto h-20 w-20 text-rose-100" /><h1 className="mt-5 text-4xl font-bold">Ready to scan</h1><p className="mt-3 text-rose-100">Use the kiosk scanner or pair a phone camera.</p>
             <div className="mx-auto mt-8 grid max-w-3xl gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-white/15 bg-white/10 p-6 backdrop-blur"><Keyboard className="mx-auto h-8 w-8" /><h2 className="mt-3 font-bold">USB scanner</h2><p className="mt-2 text-sm text-rose-100">Scan a student ID barcode or QR code directly.</p></div>
-              <div className="rounded-2xl border border-white/15 bg-white/10 p-6 backdrop-blur"><Smartphone className="mx-auto h-8 w-8" /><h2 className="mt-3 font-bold">Phone camera</h2><p className="mt-2 break-all text-sm text-rose-100">{scannerUrl}</p><div className="mt-4 rounded-xl bg-white px-4 py-3 text-2xl font-black tracking-[0.25em] text-rose-950">{sessionCode}</div></div>
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-6 backdrop-blur"><Smartphone className="mx-auto h-8 w-8" /><h2 className="mt-3 font-bold">Phone camera</h2><p className="mt-2 text-sm text-rose-100">Open the scanner, allow the camera, and scan. No Send button is needed.</p><a href={scannerUrl} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 font-bold text-rose-950 hover:bg-rose-50"><QrCode className="h-5 w-5" />Open QR scanner</a></div>
             </div>
           </div>
         )}

@@ -48,7 +48,7 @@ export function StudentsPage() {
     pageSize: PAGE_SIZE,
     ...(search ? { name: search } : {}),
     ...(selectedGrade ? { grade: selectedGrade } : {}),
-    ...(selectedSection ? { section: selectedSection } : {}),
+    ...(selectedSection ? { sectionName: selectedSection } : {}),
   };
 
   const { data, isLoading, isFetching } = useStudents(params);

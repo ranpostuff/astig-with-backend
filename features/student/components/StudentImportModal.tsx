@@ -5,6 +5,8 @@ import * as XLSX from "xlsx";
 import { trackingService } from "../../tracking/trackingService";
 import type { StudentImportRow } from "../../tracking/types";
 import { toastService } from "../../../app/services/toastService";
+import { useGrades } from "../../grades/hooks/useGrades";
+import { useSections } from "../../sections/hooks/useSections";
 
 type Props = {
   isOpen: boolean;
@@ -37,10 +39,26 @@ function mapRow(row: RawRow): StudentImportRow {
 export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
   const [rows, setRows] = useState<StudentImportRow[]>([]);
   const [fileName, setFileName] = useState("");
-  const [grade, setGrade] = useState("");
-  const [section, setSection] = useState("");
+  const [gradeId, setGradeId] = useState("");
+  const [sectionId, setSectionId] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const preview = useMemo(() => rows.slice(0, 5), [rows]);
+  const { data: gradesData, isLoading: isLoadingGrades } = useGrades({
+    pageNumber: 1,
+    pageSize: 100,
+  });
+  const grades = gradesData?.results ?? [];
+  const selectedGrade = grades.find((item) => String(item.id) === gradeId);
+  const { data: sectionsData, isLoading: isLoadingSections } = useSections(
+    {
+      pageNumber: 1,
+      pageSize: 100,
+      ...(selectedGrade ? { gradeName: selectedGrade.name } : {}),
+    },
+    Boolean(selectedGrade),
+  );
+  const sections = sectionsData?.results ?? [];
+  const selectedSection = sections.find((item) => String(item.id) === sectionId);
 
   if (!isOpen) return null;
 
@@ -63,15 +81,20 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
 
   async function handleImport() {
     if (!rows.length) return;
-    if (!grade.trim() || !section.trim()) {
-      toastService.error("Enter a default grade and section for rows that do not contain them.");
+    if (!selectedGrade || !selectedSection) {
+      toastService.error("Select the grade and section where these students should be imported.");
       return;
     }
     setIsImporting(true);
     try {
-      const summary = await trackingService.importStudents(rows, { grade, section });
+      const summary = await trackingService.importStudents(rows, {
+        gradeId: selectedGrade.id,
+        gradeName: selectedGrade.name,
+        sectionId: selectedSection.id,
+        sectionName: selectedSection.name,
+      });
       toastService.success(
-        `${summary.imported} students imported. ${summary.createdSections} sections created.`,
+        `${summary.imported} students imported to ${selectedGrade.name} – ${selectedSection.name}.`,
       );
       if (summary.skipped.length) {
         toastService.error(`${summary.skipped.length} rows were skipped because they were incomplete.`);
@@ -80,6 +103,8 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
       onClose();
       setRows([]);
       setFileName("");
+      setGradeId("");
+      setSectionId("");
     } catch (error) {
       toastService.error(error);
     } finally {
@@ -93,9 +118,7 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
         <div className="flex items-start justify-between border-b border-slate-200 p-6">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Import students from Excel</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Accepted columns: Name of Student, Name of Parent, Email Address, Phone No. (Parent), LRN, Grade, and Section.
-            </p>
+            <p className="mt-1 text-sm text-slate-500">Choose a file, then select an existing grade and section for every student in it.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close">
             <X className="h-5 w-5" />
@@ -112,12 +135,18 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">
-              Default grade
-              <input value={grade} onChange={(event) => setGrade(event.target.value)} placeholder="e.g. Grade 11" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-rose-700" />
+              Grade
+              <select value={gradeId} onChange={(event) => { setGradeId(event.target.value); setSectionId(""); }} disabled={isLoadingGrades} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-rose-700 disabled:bg-slate-100">
+                <option value="">{isLoadingGrades ? "Loading grades..." : "Select a grade"}</option>
+                {grades.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
             </label>
             <label className="text-sm font-medium text-slate-700">
-              Default section
-              <input value={section} onChange={(event) => setSection(event.target.value)} placeholder="e.g. STEM A" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-rose-700" />
+              Section
+              <select value={sectionId} onChange={(event) => setSectionId(event.target.value)} disabled={!selectedGrade || isLoadingSections} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-rose-700 disabled:bg-slate-100">
+                <option value="">{!selectedGrade ? "Select a grade first" : isLoadingSections ? "Loading sections..." : "Select a section"}</option>
+                {sections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
             </label>
           </div>
 
@@ -125,11 +154,11 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr><th className="px-4 py-3">Student</th><th className="px-4 py-3">LRN</th><th className="px-4 py-3">Parent</th><th className="px-4 py-3">Section</th></tr>
+                  <tr><th className="px-4 py-3">Student</th><th className="px-4 py-3">LRN</th><th className="px-4 py-3">Grade</th><th className="px-4 py-3">Section</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {preview.map((row, index) => (
-                    <tr key={`${row.lrn}-${index}`}><td className="px-4 py-3 font-medium text-slate-800">{row.studentName}</td><td className="px-4 py-3">{row.lrn}</td><td className="px-4 py-3">{row.parentName || "—"}</td><td className="px-4 py-3">{row.section || section || "—"}</td></tr>
+                    <tr key={`${row.lrn}-${index}`}><td className="px-4 py-3 font-medium text-slate-800">{row.studentName}</td><td className="px-4 py-3">{row.lrn}</td><td className="px-4 py-3">{selectedGrade?.name || "—"}</td><td className="px-4 py-3">{selectedSection?.name || "—"}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -140,7 +169,7 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
 
         <div className="flex justify-end gap-3 border-t border-slate-200 p-6">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button type="button" disabled={!rows.length || isImporting} onClick={() => void handleImport()} className="inline-flex items-center gap-2 rounded-lg bg-rose-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-rose-900 disabled:opacity-50">
+          <button type="button" disabled={!rows.length || !selectedGrade || !selectedSection || isImporting} onClick={() => void handleImport()} className="inline-flex items-center gap-2 rounded-lg bg-rose-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-rose-900 disabled:cursor-not-allowed disabled:opacity-50">
             <Upload className="h-4 w-4" />{isImporting ? "Importing..." : `Import ${rows.length || ""} students`}
           </button>
         </div>

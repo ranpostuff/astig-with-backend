@@ -81,10 +81,6 @@ function parseStudentName(value: string) {
   };
 }
 
-function slug(value: string) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
 async function getStudent(lrn: string) {
   const snapshot = await get(ref(firebaseDatabase, `studentDirectory/${lrn}`));
   return snapshot.exists() ? (snapshot.val() as FirebaseStudentRecord) : null;
@@ -218,12 +214,48 @@ export const trackingService = {
   },
 
   async createScanSession(code: string) {
-    await set(ref(firebaseDatabase, `scanSessions/${code}`), {
-      code,
-      createdAt: Date.now(),
-      createdByUid: firebaseAuth.currentUser?.uid || "unknown",
-      active: true,
+    const createdAt = Date.now();
+    await update(ref(firebaseDatabase), {
+      [`scanSessions/${code}`]: {
+        code,
+        createdAt,
+        createdByUid: firebaseAuth.currentUser?.uid || "unknown",
+        active: true,
+      },
+      "scanSessions/ACTIVE": {
+        code: "ACTIVE",
+        activeCode: code,
+        createdAt,
+        active: true,
+      },
     });
+  },
+
+  async closeScanSession(code: string) {
+    await update(ref(firebaseDatabase, `scanSessions/${code}`), {
+      active: false,
+      closedAt: Date.now(),
+    });
+    const activeSnapshot = await get(ref(firebaseDatabase, "scanSessions/ACTIVE"));
+    if (activeSnapshot.exists() && activeSnapshot.val().activeCode === code) {
+      await update(ref(firebaseDatabase, "scanSessions/ACTIVE"), {
+        active: false,
+        closedAt: Date.now(),
+      });
+    }
+  },
+
+  async findLatestActiveScanSession() {
+    const snapshot = await get(ref(firebaseDatabase, "scanSessions/ACTIVE"));
+    if (!snapshot.exists()) return null;
+    const session = snapshot.val() as {
+      activeCode?: string;
+      active?: boolean;
+      createdAt?: number;
+    };
+    const cutoff = Date.now() - 12 * 60 * 60 * 1000;
+    if (!session.active || !session.activeCode || Number(session.createdAt || 0) < cutoff) return null;
+    return session.activeCode;
   },
 
   subscribeScanSession(
@@ -256,31 +288,18 @@ export const trackingService = {
 
   async importStudents(
     rows: StudentImportRow[],
-    defaults: { grade: string; section: string },
+    target: { gradeId: number; gradeName: string; sectionId: number; sectionName: string },
   ): Promise<ImportSummary> {
-    const [sectionsSnapshot, gradesSnapshot] = await Promise.all([
-      get(ref(firebaseDatabase, "sections")),
-      get(ref(firebaseDatabase, "grades")),
+    const [sectionSnapshot, gradeSnapshot] = await Promise.all([
+      get(ref(firebaseDatabase, `sections/${target.sectionId}`)),
+      get(ref(firebaseDatabase, `grades/${target.gradeId}`)),
     ]);
-    const existingSections = (sectionsSnapshot.exists()
-      ? sectionsSnapshot.val()
-      : {}) as Record<string, Record<string, unknown>>;
-    const existingGrades = (gradesSnapshot.exists()
-      ? gradesSnapshot.val()
-      : {}) as Record<string, Record<string, unknown>>;
-    type LookupRecord = { key: string; id: number; name: string; [key: string]: unknown };
-    const sectionByName = new Map<string, LookupRecord>(
-      Object.entries(existingSections).map(([key, value]) => [
-        String(value.name || "").toLowerCase(),
-        { key, ...value } as LookupRecord,
-      ]),
-    );
-    const gradeByName = new Map<string, LookupRecord>(
-      Object.entries(existingGrades).map(([key, value]) => [
-        String(value.name || "").toLowerCase(),
-        { key, ...value } as LookupRecord,
-      ]),
-    );
+    if (!gradeSnapshot.exists()) throw new Error("The selected grade no longer exists.");
+    if (!sectionSnapshot.exists()) throw new Error("The selected section no longer exists.");
+    const sectionRecord = sectionSnapshot.val() as { gradeId?: number };
+    if (Number(sectionRecord.gradeId) !== target.gradeId) {
+      throw new Error("The selected section does not belong to the selected grade.");
+    }
     const updates: Record<string, unknown> = {};
     const summary: ImportSummary = {
       imported: 0,
@@ -300,37 +319,6 @@ export const trackingService = {
         continue;
       }
 
-      const gradeName = normalizeName(row.grade || defaults.grade || "Unassigned Grade");
-      const sectionName = normalizeName(row.section || defaults.section || "Unassigned Section");
-      let grade: LookupRecord | undefined = gradeByName.get(gradeName.toLowerCase());
-      if (!grade) {
-        const id = Date.now() + gradeByName.size;
-        const key = String(id);
-        grade = { key, id, name: gradeName, description: null, createdAt: Date.now() };
-        gradeByName.set(gradeName.toLowerCase(), grade);
-        updates[`grades/${key}`] = grade;
-        summary.createdGrades += 1;
-      }
-
-      let section: LookupRecord | undefined = sectionByName.get(sectionName.toLowerCase());
-      if (!section) {
-        const id = Date.now() + 1000 + sectionByName.size;
-        const key = String(id);
-        section = {
-          key,
-          id,
-          name: sectionName,
-          gradeId: Number(grade.id),
-          gradeName,
-          assignedTeacherId: "",
-          assignedTeacherName: "Unassigned",
-          slug: slug(sectionName),
-        };
-        sectionByName.set(sectionName.toLowerCase(), section);
-        updates[`sections/${key}`] = section;
-        summary.createdSections += 1;
-      }
-
       const parsed = parseStudentName(row.studentName);
       const timestamp = Date.now();
       const student: FirebaseStudentRecord = {
@@ -344,10 +332,10 @@ export const trackingService = {
         parentMobileNo: normalizeName(row.parentPhone || ""),
         parentEmail: normalizeName(row.parentEmail || "") || null,
         studentPicUrl: null,
-        sectionId: Number(section.id),
-        sectionName,
-        gradeId: Number(grade.id),
-        gradeName,
+        sectionId: target.sectionId,
+        sectionName: target.sectionName,
+        gradeId: target.gradeId,
+        gradeName: target.gradeName,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
