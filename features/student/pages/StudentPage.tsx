@@ -2,8 +2,9 @@ import { useState } from "react";
 
 import { ChevronLeft, ChevronRight, FileSpreadsheet, Plus, Search } from "lucide-react";
 
-import { useGrades } from "../../grades/hooks/useGrades";
+import { gradeKeys, useGrades } from "../../grades/hooks/useGrades";
 import { useSections } from "../../sections/hooks/useSections";
+import { sectionKeys } from "../../sections/hooks/sectionKeys";
 
 import { DeleteStudentDialog } from "../components/DeleteStudentDialog";
 import { StudentFormModal } from "../components/StudentFormModal";
@@ -399,7 +400,13 @@ export function StudentsPage() {
       <StudentImportModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
-        onImported={() => void queryClient.invalidateQueries({ queryKey: studentKeys.lists() })}
+        onImported={() => {
+          void Promise.all([
+            queryClient.invalidateQueries({ queryKey: studentKeys.lists() }),
+            queryClient.invalidateQueries({ queryKey: gradeKeys.lists() }),
+            queryClient.invalidateQueries({ queryKey: sectionKeys.lists() }),
+          ]);
+        }}
       />
     </div>
   );

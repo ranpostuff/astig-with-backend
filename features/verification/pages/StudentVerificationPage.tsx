@@ -137,7 +137,10 @@ export function StudentVerificationPage() {
 
   const time = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }).format(currentTime);
   const date = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(currentTime);
-  const scannerUrl = `${window.location.origin}/scanner?session=${sessionCode}`;
+  const scannerUrl = new URL(
+    `scanner?session=${sessionCode}`,
+    `${window.location.origin}${import.meta.env.BASE_URL}`,
+  ).toString();
 
   return <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-rose-950 via-rose-900 to-pink-900">
     <SchoolLogoBackground />
