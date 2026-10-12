@@ -258,10 +258,16 @@ export const trackingService = {
     rows: StudentImportRow[],
     defaults: { grade: string; section: string },
   ): Promise<ImportSummary> {
-    const rootSnapshot = await get(ref(firebaseDatabase));
-    const root = rootSnapshot.exists() ? rootSnapshot.val() : {};
-    const existingSections = (root.sections || {}) as Record<string, Record<string, unknown>>;
-    const existingGrades = (root.grades || {}) as Record<string, Record<string, unknown>>;
+    const [sectionsSnapshot, gradesSnapshot] = await Promise.all([
+      get(ref(firebaseDatabase, "sections")),
+      get(ref(firebaseDatabase, "grades")),
+    ]);
+    const existingSections = (sectionsSnapshot.exists()
+      ? sectionsSnapshot.val()
+      : {}) as Record<string, Record<string, unknown>>;
+    const existingGrades = (gradesSnapshot.exists()
+      ? gradesSnapshot.val()
+      : {}) as Record<string, Record<string, unknown>>;
     type LookupRecord = { key: string; id: number; name: string; [key: string]: unknown };
     const sectionByName = new Map<string, LookupRecord>(
       Object.entries(existingSections).map(([key, value]) => [
