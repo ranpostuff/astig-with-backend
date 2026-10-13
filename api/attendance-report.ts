@@ -3,6 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
 
 const TIME_ZONE = "Asia/Manila";
+const DEPLOYMENT_VERSION = "brevo-attendance-api-2026-10-13.1";
 
 type RequestLike = {
   method?: string;
@@ -250,6 +251,7 @@ async function sendReports(input: ReportRequest & { teacherId?: string; schedule
 
 export default async function handler(request: RequestLike, response: ResponseLike) {
   response.setHeader("Cache-Control", "no-store");
+  response.setHeader("X-ASTIG-Deployment", DEPLOYMENT_VERSION);
   try {
     initializeFirebaseAdmin();
     const authorization = Array.isArray(request.headers.authorization)
