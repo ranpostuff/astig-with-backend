@@ -67,7 +67,7 @@ export default function TeacherDetailsPage() {
 
         <button
           type="button"
-          onClick={() => navigate(`/dashboard/teachers/${teacher.id}/edit`)}
+          onClick={() => navigate(`/teachers/${teacher.id}/edit`)}
           className="
             inline-flex items-center justify-center
             rounded-lg bg-rose-950

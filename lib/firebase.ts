@@ -10,7 +10,7 @@ const configuredApiKey =
   import.meta.env.VITE_FIREBASE_API_KEY ||
   "AIzaSyDMHGI5uVWHYslyFwj2xc4GgtwMq5XlZB0";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: configuredApiKey || "configuration-required",
   authDomain:
     import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "astig-backend.firebaseapp.com",

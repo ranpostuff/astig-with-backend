@@ -22,6 +22,7 @@ import type {
 const SCHOOL_TIME_ZONE = "Asia/Manila";
 const LATE_HOUR = 7;
 const LATE_MINUTE = 15;
+const DUPLICATE_SCAN_COOLDOWN_MS = 10_000;
 
 function schoolDateParts(timestamp = Date.now()) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -49,7 +50,13 @@ function schoolDateParts(timestamp = Date.now()) {
 
 function isLate(timestamp: number) {
   const { hour, minute } = schoolDateParts(timestamp);
-  return hour > LATE_HOUR || (hour === LATE_HOUR && minute > LATE_MINUTE);
+  return hour > LATE_HOUR || (hour === LATE_HOUR && minute >= LATE_MINUTE);
+}
+
+async function reliableTimestamp() {
+  const offsetSnapshot = await get(ref(firebaseDatabase, ".info/serverTimeOffset"));
+  const offset = offsetSnapshot.exists() ? Number(offsetSnapshot.val()) : 0;
+  return Date.now() + (Number.isFinite(offset) ? offset : 0);
 }
 
 function fullName(student: FirebaseStudentRecord) {
@@ -134,9 +141,11 @@ export const trackingService = {
     const student = await getStudent(lrn);
     if (!student) throw new Error(`No student was found for LRN ${lrn}.`);
 
-    const timestamp = Date.now();
+    const timestamp = await reliableTimestamp();
     const dateKey = schoolDateParts(timestamp).dateKey;
     let action: "ENTRY" | "EXIT" = "ENTRY";
+    let duplicateScan = false;
+    let waitSeconds = 10;
     const attendanceRef = ref(firebaseDatabase, `attendance/${dateKey}/${lrn}`);
     const transaction = await runTransaction(attendanceRef, (current) => {
       if (!current) {
@@ -156,10 +165,20 @@ export const trackingService = {
         } satisfies DailyAttendanceRecord;
       }
 
+      const elapsed = timestamp - Number(current.lastScanAt || current.entryAt || 0);
+      if (elapsed >= 0 && elapsed < DUPLICATE_SCAN_COOLDOWN_MS) {
+        duplicateScan = true;
+        waitSeconds = Math.max(1, Math.ceil((DUPLICATE_SCAN_COOLDOWN_MS - elapsed) / 1000));
+        return;
+      }
+
       action = "EXIT";
       return { ...current, exitAt: timestamp, lastScanAt: timestamp };
     });
 
+    if (duplicateScan) {
+      throw new Error(`SCAN REJECTED — PLEASE WAIT ${waitSeconds} SECOND${waitSeconds === 1 ? "" : "S"}.`);
+    }
     if (!transaction.committed || !transaction.snapshot.exists()) {
       throw new Error("The attendance record could not be saved.");
     }

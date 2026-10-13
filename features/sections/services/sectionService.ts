@@ -10,6 +10,22 @@ async function gradeName(gradeId: number) {
   return String(snapshot.val().name);
 }
 
+async function teacherInfo(teacherId: string) {
+  const snapshot = await get(ref(firebaseDatabase, `teachers/${teacherId}`));
+  if (!snapshot.exists()) throw new Error("The selected teacher does not exist.");
+  const teacher = snapshot.val() as { firstName?: string; middleName?: string | null; lastName?: string; extension?: string | null };
+  return [teacher.firstName, teacher.middleName, teacher.lastName, teacher.extension].filter(Boolean).join(" ");
+}
+
+async function ensureUniqueSection(name: string, gradeId: number, exceptId?: number) {
+  const snapshot = await get(ref(firebaseDatabase, "sections"));
+  if (!snapshot.exists()) return;
+  const sections = Object.values(snapshot.val() as Record<string, SectionRecord>);
+  if (sections.some((section) => section.id !== exceptId && section.gradeId === gradeId && section.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+    throw new Error("A section with this name already exists in the selected grade.");
+  }
+}
+
 export const sectionService = {
   async getList(params: SectionListParams): Promise<SectionListResponse> {
     const snapshot = await get(ref(firebaseDatabase, "sections"));
@@ -28,14 +44,16 @@ export const sectionService = {
     return snapshot.val() as SectionDetails;
   },
   async create(request: CreateSectionRequest): Promise<SectionDetails> {
+    await ensureUniqueSection(request.name, request.gradeId);
     const id = Date.now();
-    const record: SectionDetails = { id, name: request.name.trim(), assignedTeacherId: request.assignedTeacherId, assignedTeacherName: request.assignedTeacherId ? "Assigned teacher" : "Unassigned", gradeId: request.gradeId, gradeName: await gradeName(request.gradeId) };
+    const record: SectionDetails = { id, name: request.name.trim(), assignedTeacherId: request.assignedTeacherId, assignedTeacherName: await teacherInfo(request.assignedTeacherId), gradeId: request.gradeId, gradeName: await gradeName(request.gradeId) };
     await set(ref(firebaseDatabase, `sections/${id}`), record);
     return record;
   },
   async update(id: number, request: UpdateSectionRequest): Promise<SectionDetails> {
     const existing = await this.getById(id);
-    const record: SectionDetails = { ...existing, name: request.name.trim(), assignedTeacherId: request.assignedTeacherId, assignedTeacherName: request.assignedTeacherId ? existing.assignedTeacherName || "Assigned teacher" : "Unassigned", gradeId: request.gradeId, gradeName: await gradeName(request.gradeId) };
+    await ensureUniqueSection(request.name, request.gradeId, id);
+    const record: SectionDetails = { ...existing, name: request.name.trim(), assignedTeacherId: request.assignedTeacherId, assignedTeacherName: await teacherInfo(request.assignedTeacherId), gradeId: request.gradeId, gradeName: await gradeName(request.gradeId) };
     await set(ref(firebaseDatabase, `sections/${id}`), record);
     return record;
   },
