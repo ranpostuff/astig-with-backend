@@ -43,7 +43,11 @@ export function MobileScannerPage() {
   }, []);
 
   async function resolveSession() {
-    if (session.trim()) return session.trim().toUpperCase();
+    if (session.trim()) {
+      const code = session.trim().toUpperCase();
+      if (!/^[A-Z2-9]{6}$/.test(code)) throw new Error("The kiosk connection code is invalid. Reopen the scanner from the kiosk page.");
+      return code;
+    }
     const activeSession = await trackingService.findLatestActiveScanSession();
     if (activeSession) setSession(activeSession);
     return activeSession;
@@ -82,8 +86,11 @@ export function MobileScannerPage() {
 
   async function handleDecoded(decodedText: string) {
     if (scanLocked.current) return;
-    const lrn = decodedText.replace(/\D/g, "");
-    if (!/^\d{12}$/.test(lrn)) {
+    const trimmed = decodedText.trim();
+    const lrn = /^\d{12}$/.test(trimmed)
+      ? trimmed
+      : trimmed.match(/(?:^|\D)(\d{12})(?:\D|$)/)?.[1] || "";
+    if (!lrn) {
       setMessage("That QR code is not a valid 12-digit student LRN.");
       return;
     }

@@ -2,9 +2,29 @@ import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
-const databaseURL =
-  import.meta.env.VITE_FIREBASE_DATABASE_URL ||
+const DEFAULT_DATABASE_URL =
   "https://astig-backend-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+function normalizeDatabaseUrl(value: unknown) {
+  const configured = typeof value === "string" ? value.trim() : "";
+  if (!configured) return DEFAULT_DATABASE_URL;
+
+  // Values copied from the Firebase data viewer can accidentally include its
+  // selected path (for example `/null` or `/:null`). The SDK expects only the
+  // database origin here; keeping that suffix makes every request fail with
+  // "Invalid token in path".
+  try {
+    const parsed = new URL(configured);
+    if (!/\.firebaseio\.com$|\.firebasedatabase\.app$/i.test(parsed.hostname)) {
+      return DEFAULT_DATABASE_URL;
+    }
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return DEFAULT_DATABASE_URL;
+  }
+}
+
+const databaseURL = normalizeDatabaseUrl(import.meta.env.VITE_FIREBASE_DATABASE_URL);
 
 const configuredApiKey =
   import.meta.env.VITE_FIREBASE_API_KEY ||

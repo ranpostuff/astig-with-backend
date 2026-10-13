@@ -74,6 +74,14 @@ function normalizeName(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
+function normalizeLrn(value: string) {
+  const trimmed = value.trim();
+  if (/^\d{12}$/.test(trimmed)) return trimmed;
+  const embedded = trimmed.match(/(?:^|\D)(\d{12})(?:\D|$)/)?.[1];
+  if (embedded) return embedded;
+  throw new Error("That QR code does not contain a valid 12-digit student LRN.");
+}
+
 function parseStudentName(value: string) {
   const cleaned = normalizeName(value);
   const parts = cleaned.split(",").map((part) => part.trim()).filter(Boolean);
@@ -137,7 +145,7 @@ export const trackingService = {
   },
 
   async recordAttendance(lrnValue: string, source: "KIOSK" | "MOBILE") {
-    const lrn = lrnValue.trim();
+    const lrn = normalizeLrn(lrnValue);
     const student = await getStudent(lrn);
     if (!student) throw new Error(`No student was found for LRN ${lrn}.`);
 
@@ -206,7 +214,7 @@ export const trackingService = {
     notes: string,
     recordedByName: string,
   ) {
-    const lrn = lrnValue.trim();
+    const lrn = normalizeLrn(lrnValue);
     const student = await getStudent(lrn);
     if (!student) throw new Error(`No student was found for LRN ${lrn}.`);
     if (!type.trim()) throw new Error("Choose a violation before saving.");
