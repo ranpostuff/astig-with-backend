@@ -24,7 +24,20 @@ export const reportService = {
       },
       body: JSON.stringify(request),
     });
-    const result = await response.json() as ReportResult & { error?: string };
+    const responseText = await response.text();
+    let result: ReportResult & { error?: string };
+    try {
+      result = responseText
+        ? JSON.parse(responseText) as ReportResult & { error?: string }
+        : { sent: 0, skipped: [], emailIds: [], error: `Email service returned HTTP ${response.status}.` };
+    } catch {
+      result = {
+        sent: 0,
+        skipped: [],
+        emailIds: [],
+        error: `Email service returned HTTP ${response.status}. Redeploy the Vercel API route.`,
+      };
+    }
     if (!response.ok) throw new Error(result.error || "Unable to send attendance report.");
     return result;
   },
