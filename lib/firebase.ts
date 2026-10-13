@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getDatabase } from "firebase/database";
+import { forceLongPolling, getDatabase } from "firebase/database";
 
 const DEFAULT_DATABASE_URL =
   "https://astig-backend-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -47,6 +47,11 @@ export const firebaseConfig = {
 export const isFirebaseConfigured = Boolean(configuredApiKey);
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const firebaseAuth = getAuth(firebaseApp);
+
+// School networks, browser VPNs, and restrictive proxies commonly block the
+// WebSocket transport used by Realtime Database. Long polling uses normal HTTPS
+// requests and keeps kiosk/mobile synchronization working on those networks.
+forceLongPolling();
 export const firebaseDatabase = getDatabase(firebaseApp, databaseURL);
 
 export function requireFirebaseConfiguration() {

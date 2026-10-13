@@ -1,20 +1,19 @@
-# ASTIG scanner invalid-path fix
+# ASTIG scanner network and path fix
 
-Copy these files over the matching paths in the repository, commit, and push:
+Copy these files over the matching paths in the repository, commit, and push.
 
-- `lib/firebase.ts`
-- `features/tracking/trackingService.ts`
-- `features/tracking/MobileScannerPage.tsx`
-- `database.rules.json`
+This update:
 
-The Firebase initialization now accepts only the Realtime Database origin. It
-automatically removes an accidentally copied Firebase Console path such as
-`/null` or `/:null`, which otherwise makes scans fail with `Invalid token in
-path`.
+- accepts only the Firebase Realtime Database origin and removes accidental
+  Firebase Console suffixes such as `/null` or `/:null`;
+- forces Firebase HTTPS long polling so school networks, VPNs, and proxies that
+  reject WebSockets do not break kiosk/mobile synchronization;
+- sanitizes QR contents down to a valid 12-digit LRN.
 
-In Vercel, `VITE_FIREBASE_DATABASE_URL` should still be set exactly to:
+Keep this Vercel Production environment variable:
 
-`https://astig-backend-default-rtdb.asia-southeast1.firebasedatabase.app`
+`VITE_FIREBASE_DATABASE_URL=https://astig-backend-default-rtdb.asia-southeast1.firebasedatabase.app`
 
-After Vercel finishes deploying, open the newest deployment, hard-refresh the
-kiosk page with `Ctrl+Shift+R`, and scan again.
+After Vercel deploys the commit, open the newest deployment, use
+`Ctrl+Shift+R`, and scan again. Turning off the browser VPN for the site is also
+recommended.
