@@ -2,6 +2,12 @@
 
 The attendance email backend runs as a Vercel Function. Firebase remains on the Spark plan for Authentication and Realtime Database. Brevo sends the transactional attendance reports.
 
+## Required Vercel build configuration
+
+Keep `framework: null`, `buildCommand: "npm run build"`, and `outputDirectory: "build/client"` in the root `vercel.json`. This intentionally selects Vercel's Other preset: its React Router preset ignores standalone Node functions under `api/`. React Router still builds the frontend in SPA mode through the build command.
+
+The function pattern in `vercel.json` is a deployment guard: the build must fail if `api/attendance-report.ts` is not registered. After pushing this configuration, inspect the new deployment's Resources for the attendance-report function. Opening `/api/attendance-report` without credentials should return a JSON error, never the website HTML. A JSON environment-variable error means the function is deployed but server configuration is incomplete.
+
 ## 1. Create and verify the Brevo sender
 
 In Brevo, open **Settings → Senders, Domains & Dedicated IPs → Senders**, then choose **Add a sender**.
