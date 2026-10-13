@@ -17,8 +17,7 @@ export function useDeleteTeacher() {
     },
 
     onError: (error) => {
-      console.error(error);
-      toastService.error("Failed to delete teacher.");
+      toastService.error(error);
     },
   });
 

@@ -115,6 +115,13 @@ export const teacherService = {
   },
 
   async delete(id: string): Promise<void> {
+    const sectionsSnapshot = await get(ref(firebaseDatabase, "sections"));
+    if (sectionsSnapshot.exists()) {
+      const sections = Object.values(sectionsSnapshot.val() as Record<string, { assignedTeacherId?: string }>);
+      if (sections.some((section) => section.assignedTeacherId === id)) {
+        throw new Error("Assign this teacher's section to another adviser before deleting the teacher.");
+      }
+    }
     await updateDatabase(ref(firebaseDatabase), {
       [`teachers/${id}`]: null,
       [`users/${id}`]: null,
@@ -134,14 +141,24 @@ export const teacherService = {
       profilePictureUrl: request.profilePictureUrl || null,
       updatedAt: Date.now(),
     };
-    await updateDatabase(ref(firebaseDatabase), {
+    const updates: Record<string, unknown> = {
       [`teachers/${id}`]: teacher,
       [`users/${id}/firstName`]: teacher.firstName,
       [`users/${id}/middleName`]: teacher.middleName,
       [`users/${id}/lastName`]: teacher.lastName,
       [`users/${id}/extension`]: teacher.extension,
       [`users/${id}/dateOfBirth`]: teacher.dateOfBirth,
-    });
+    };
+    const sectionsSnapshot = await get(ref(firebaseDatabase, "sections"));
+    if (sectionsSnapshot.exists()) {
+      const teacherName = [teacher.firstName, teacher.middleName, teacher.lastName, teacher.extension]
+        .filter(Boolean)
+        .join(" ");
+      for (const section of Object.values(sectionsSnapshot.val() as Record<string, { id: number; assignedTeacherId?: string }>)) {
+        if (section.assignedTeacherId === id) updates[`sections/${section.id}/assignedTeacherName`] = teacherName;
+      }
+    }
+    await updateDatabase(ref(firebaseDatabase), updates);
     return teacher;
   },
 };

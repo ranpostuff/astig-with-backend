@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const studentSchema = z.object({
-  lrn: z.string().trim().min(1, "LRN is required."),
+  lrn: z.string().trim().regex(/^\d{12}$/, "LRN must contain exactly 12 digits."),
 
   firstName: z.string().trim().min(1, "First name is required."),
 
@@ -16,6 +16,7 @@ export const studentSchema = z.object({
   parentEmail: z
     .string()
     .trim()
+    .email("Please enter a valid parent email address.")
     .optional()
     .or(z.literal("")),
 

@@ -24,12 +24,15 @@ export function useUpdateTeacher() {
         queryKey: ["teachers", variables.id],
       });
 
+      queryClient.invalidateQueries({
+        queryKey: ["sections"],
+      });
+
       toastService.success("Teacher updated successfully.");
     },
 
     onError: (error) => {
-      console.error(error);
-      toastService.error("Failed to update teacher.");
+      toastService.error(error);
     },
   });
 

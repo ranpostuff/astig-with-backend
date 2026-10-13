@@ -1,6 +1,20 @@
 export type AttendanceStatus = "ON_TIME" | "LATE";
 export type ScanAction = "ENTRY" | "EXIT";
 
+export interface GradeOption {
+  id: number;
+  name: string;
+}
+
+export interface SectionOption {
+  id: number;
+  name: string;
+  gradeId: number;
+  gradeName: string;
+  assignedTeacherId?: string;
+  assignedTeacherName?: string;
+}
+
 export interface FirebaseStudentRecord {
   id: number;
   lrn: string;

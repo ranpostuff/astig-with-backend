@@ -53,7 +53,7 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
     {
       pageNumber: 1,
       pageSize: 100,
-      ...(selectedGrade ? { gradeName: selectedGrade.name } : {}),
+      ...(selectedGrade ? { gradeId: selectedGrade.id } : {}),
     },
     Boolean(selectedGrade),
   );
@@ -97,7 +97,8 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
         `${summary.imported} students imported to ${selectedGrade.name} – ${selectedSection.name}.`,
       );
       if (summary.skipped.length) {
-        toastService.error(`${summary.skipped.length} rows were skipped because they were incomplete.`);
+        const firstReason = summary.skipped[0]?.reason;
+        toastService.error(`${summary.skipped.length} row${summary.skipped.length === 1 ? " was" : "s were"} skipped.${firstReason ? ` First issue: ${firstReason}` : ""}`);
       }
       onImported();
       onClose();

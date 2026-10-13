@@ -1,7 +1,9 @@
 export interface Section {
   id: number;
   name: string;
+  assignedTeacherId: string;
   assignedTeacher: string;
+  gradeId: number;
   gradeName: string;
 }
 
@@ -29,6 +31,7 @@ export interface UpdateSectionRequest {
 export interface SectionListParams {
   name?: string;
   assignedTeacherName?: string;
+  gradeId?: number;
   gradeName?: string;
   pageNumber: number;
   pageSize: number;

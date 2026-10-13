@@ -26,6 +26,7 @@ interface StudentFormModalProps {
 }
 
 const LOOKUP_PAGE_SIZE = 100;
+const MAX_PROFILE_PICTURE_SIZE = 1024 * 1024;
 
 export function StudentFormModal({
   isOpen,
@@ -40,9 +41,8 @@ export function StudentFormModal({
 
   const isSubmitting = createStudent.isPending || updateStudent.isPending;
 
-  const [selectedGrade, setSelectedGrade] = useState("");
+  const [selectedGradeId, setSelectedGradeId] = useState("");
 
-  const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
   const [picturePreview, setPicturePreview] = useState<string | null>(null);
 
   const pictureInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +51,7 @@ export function StudentFormModal({
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -75,7 +76,7 @@ export function StudentFormModal({
   const { data: sectionsData, isLoading: isSectionsLoading } = useSections({
     pageNumber: 1,
     pageSize: LOOKUP_PAGE_SIZE,
-    ...(selectedGrade ? { gradeName: selectedGrade } : {}),
+    ...(selectedGradeId ? { gradeId: Number(selectedGradeId) } : {}),
   });
 
   const grades = gradesData?.results ?? [];
@@ -87,7 +88,7 @@ export function StudentFormModal({
     }
 
     if (mode === "edit" && student) {
-      setSelectedGrade(student.gradeName);
+      setSelectedGradeId(String(student.gradeId));
 
       reset({
         lrn: student.lrn,
@@ -101,10 +102,9 @@ export function StudentFormModal({
         sectionId: student.sectionId,
       });
 
-      setSelectedPicture(null);
       setPicturePreview(student.studentPicUrl || null);
     } else {
-      setSelectedGrade("");
+      setSelectedGradeId("");
 
       reset({
         lrn: "",
@@ -118,13 +118,12 @@ export function StudentFormModal({
         sectionId: 0,
       });
 
-      setSelectedPicture(null);
       setPicturePreview(null);
     }
   }, [isOpen, mode, student, reset]);
 
   useEffect(() => {
-    if (!isOpen || !selectedGrade) {
+    if (!isOpen || !selectedGradeId) {
       return;
     }
 
@@ -139,7 +138,7 @@ export function StudentFormModal({
         },
       );
     }
-  }, [selectedGrade, isOpen, mode, reset]);
+  }, [selectedGradeId, isOpen, mode, reset]);
 
   function handlePictureChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -149,25 +148,30 @@ export function StudentFormModal({
     }
 
     if (!file.type.startsWith("image/")) {
+      toastService.error("Please choose a valid image file.");
+      event.target.value = "";
       return;
     }
 
-    setSelectedPicture(file);
-
-    if (picturePreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(picturePreview);
+    if (file.size > MAX_PROFILE_PICTURE_SIZE) {
+      toastService.error("Profile picture must not exceed 1 MB.");
+      event.target.value = "";
+      return;
     }
 
-    setPicturePreview(URL.createObjectURL(file));
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      setValue("studentPicUrl", dataUrl, { shouldDirty: true, shouldValidate: true });
+      setPicturePreview(dataUrl || null);
+    };
+    reader.onerror = () => toastService.error("The selected picture could not be read.");
+    reader.readAsDataURL(file);
   }
 
   function handleRemovePicture() {
-    if (picturePreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(picturePreview);
-    }
-
-    setSelectedPicture(null);
     setPicturePreview(null);
+    setValue("studentPicUrl", "", { shouldDirty: true });
 
     if (pictureInputRef.current) {
       pictureInputRef.current.value = "";
@@ -281,12 +285,19 @@ export function StudentFormModal({
               placeholder="Enter learner reference number"
               {...register("lrn")}
               disabled={isSubmitting}
+              readOnly={mode === "edit"}
+              inputMode="numeric"
+              maxLength={12}
               className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition ${
                 errors.lrn
                   ? "border-red-400 focus:border-red-500"
                   : "border-slate-300 focus:border-rose-700"
-              } disabled:cursor-not-allowed disabled:bg-slate-100`}
+              } read-only:cursor-not-allowed read-only:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100`}
             />
+
+            {mode === "edit" && (
+              <p className="mt-1 text-xs text-slate-500">LRN is the student's permanent record key and cannot be changed.</p>
+            )}
 
             {errors.lrn && (
               <p className="mt-1 text-sm text-red-600">{errors.lrn.message}</p>
@@ -491,7 +502,7 @@ export function StudentFormModal({
               </h3>
 
               <p className="mt-1 text-sm text-slate-500">
-                Optional. Maximum file size is 10 MB.
+                Optional. Maximum file size is 1 MB.
               </p>
             </div>
 
@@ -571,8 +582,8 @@ export function StudentFormModal({
 
               <select
                 id="student-grade"
-                value={selectedGrade}
-                onChange={(event) => setSelectedGrade(event.target.value)}
+                value={selectedGradeId}
+                onChange={(event) => setSelectedGradeId(event.target.value)}
                 disabled={isSubmitting || isGradesLoading}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-rose-700 disabled:cursor-not-allowed disabled:bg-slate-100"
               >
@@ -581,7 +592,7 @@ export function StudentFormModal({
                 </option>
 
                 {grades.map((grade) => (
-                  <option key={grade.id} value={grade.name}>
+                  <option key={grade.id} value={grade.id}>
                     {grade.name}
                   </option>
                 ))}
@@ -602,7 +613,7 @@ export function StudentFormModal({
                 {...register("sectionId", {
                   valueAsNumber: true,
                 })}
-                disabled={isSubmitting || isSectionsLoading || !selectedGrade}
+                disabled={isSubmitting || isSectionsLoading || !selectedGradeId}
                 className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition ${
                   errors.sectionId
                     ? "border-red-400 focus:border-red-500"
@@ -612,7 +623,7 @@ export function StudentFormModal({
                 <option value={0}>
                   {isSectionsLoading
                     ? "Loading sections..."
-                    : !selectedGrade
+                    : !selectedGradeId
                       ? "Select a grade first"
                       : "Select a section"}
                 </option>

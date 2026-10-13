@@ -15,7 +15,7 @@ type CreateTeacherFormProps = {
   isPending?: boolean;
 };
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 1024 * 1024;
 
 export function CreateTeacherForm({
   onSubmit,
@@ -44,7 +44,7 @@ export function CreateTeacherForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
-  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [profilePictureDataUrl, setProfilePictureDataUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
 
   const handleProfilePictureChange = (
@@ -70,23 +70,19 @@ export function CreateTeacherForm({
       return;
     }
 
-    if (profilePreview) {
-      URL.revokeObjectURL(profilePreview);
-    }
-
-    setProfileFile(file);
-
-    const previewUrl = URL.createObjectURL(file);
-    setProfilePreview(previewUrl);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : null;
+      setProfilePictureDataUrl(dataUrl);
+      setProfilePreview(dataUrl);
+    };
+    reader.onerror = () => setFileError("The selected picture could not be read.");
+    reader.readAsDataURL(file);
   };
 
   const removeProfilePicture = () => {
-    if (profilePreview) {
-      URL.revokeObjectURL(profilePreview);
-    }
-
     setProfilePreview(null);
-    setProfileFile(null);
+    setProfilePictureDataUrl(null);
     setFileError(null);
 
     if (fileInputRef.current) {
@@ -99,11 +95,8 @@ export function CreateTeacherForm({
       ...values,
       middleName: values.middleName || null,
       extension: values.extension || null,
-      profilePictureUrl: values.profilePictureUrl || null,
+      profilePictureUrl: profilePictureDataUrl || values.profilePictureUrl || null,
     };
-
-    // Intentionally not sending the file yet.
-    console.log("Selected profile picture:", profileFile);
 
     onSubmit(request);
   };
@@ -115,7 +108,7 @@ export function CreateTeacherForm({
         <h2 className="text-lg font-semibold text-rose-950">Profile Picture</h2>
 
         <p className="mt-1 text-sm text-slate-500">
-          Optional. Maximum file size is 10 MB.
+          Optional. Maximum file size is 1 MB.
         </p>
 
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">

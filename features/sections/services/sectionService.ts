@@ -1,4 +1,4 @@
-import { get, ref, remove, set } from "firebase/database";
+import { get, ref, set, update as updateDatabase } from "firebase/database";
 import { firebaseDatabase } from "../../../lib/firebase";
 import type { BaseResponse, CreateSectionRequest, SectionDetails, SectionListParams, SectionListResponse, UpdateSectionRequest } from "../types/section";
 
@@ -30,11 +30,23 @@ export const sectionService = {
   async getList(params: SectionListParams): Promise<SectionListResponse> {
     const snapshot = await get(ref(firebaseDatabase, "sections"));
     let records = snapshot.exists() ? Object.values(snapshot.val() as Record<string, SectionRecord>) : [];
-    records = records.filter((section) => (!params.name || section.name.toLowerCase().includes(params.name.toLowerCase())) && (!params.assignedTeacherName || section.assignedTeacherName.toLowerCase().includes(params.assignedTeacherName.toLowerCase())) && (!params.gradeName || section.gradeName === params.gradeName)).sort((a, b) => a.name.localeCompare(b.name));
+    records = records.filter((section) =>
+      (!params.name || section.name.toLowerCase().includes(params.name.toLowerCase())) &&
+      (!params.assignedTeacherName || (section.assignedTeacherName || "").toLowerCase().includes(params.assignedTeacherName.toLowerCase())) &&
+      (!params.gradeId || Number(section.gradeId) === Number(params.gradeId)) &&
+      (!params.gradeName || section.gradeName === params.gradeName),
+    ).sort((a, b) => a.gradeName.localeCompare(b.gradeName, undefined, { numeric: true }) || a.name.localeCompare(b.name));
     const totalCount = records.length;
     const start = (params.pageNumber - 1) * params.pageSize;
     return {
-      results: records.slice(start, start + params.pageSize).map((section) => ({ id: section.id, name: section.name, assignedTeacher: section.assignedTeacherName || "Unassigned", gradeName: section.gradeName })),
+      results: records.slice(start, start + params.pageSize).map((section) => ({
+        id: section.id,
+        name: section.name,
+        assignedTeacherId: section.assignedTeacherId || "",
+        assignedTeacher: section.assignedTeacherName || "Unassigned",
+        gradeId: section.gradeId,
+        gradeName: section.gradeName,
+      })),
       pageNumber: params.pageNumber, pageSize: params.pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / params.pageSize)), message: "Success",
     };
   },
@@ -54,11 +66,32 @@ export const sectionService = {
     const existing = await this.getById(id);
     await ensureUniqueSection(request.name, request.gradeId, id);
     const record: SectionDetails = { ...existing, name: request.name.trim(), assignedTeacherId: request.assignedTeacherId, assignedTeacherName: await teacherInfo(request.assignedTeacherId), gradeId: request.gradeId, gradeName: await gradeName(request.gradeId) };
-    await set(ref(firebaseDatabase, `sections/${id}`), record);
+    const studentsSnapshot = await get(ref(firebaseDatabase, "students"));
+    const students = studentsSnapshot.exists()
+      ? Object.values(studentsSnapshot.val() as Record<string, { lrn: string; sectionId: number }>)
+      : [];
+    const updates: Record<string, unknown> = { [`sections/${id}`]: record };
+    for (const student of students) {
+      if (Number(student.sectionId) !== Number(id)) continue;
+      updates[`students/${student.lrn}/sectionName`] = record.name;
+      updates[`students/${student.lrn}/gradeId`] = record.gradeId;
+      updates[`students/${student.lrn}/gradeName`] = record.gradeName;
+      updates[`studentDirectory/${student.lrn}/sectionName`] = record.name;
+      updates[`studentDirectory/${student.lrn}/gradeId`] = record.gradeId;
+      updates[`studentDirectory/${student.lrn}/gradeName`] = record.gradeName;
+    }
+    await updateDatabase(ref(firebaseDatabase), updates);
     return record;
   },
   async delete(id: number): Promise<BaseResponse> {
-    await remove(ref(firebaseDatabase, `sections/${id}`));
+    const studentsSnapshot = await get(ref(firebaseDatabase, "students"));
+    if (studentsSnapshot.exists()) {
+      const students = Object.values(studentsSnapshot.val() as Record<string, { sectionId: number }>);
+      if (students.some((student) => Number(student.sectionId) === Number(id))) {
+        throw new Error("Move or delete the students in this section before deleting it.");
+      }
+    }
+    await updateDatabase(ref(firebaseDatabase), { [`sections/${id}`]: null });
     return { message: "Section deleted." };
   },
 };

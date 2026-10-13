@@ -3,6 +3,8 @@ import { toastService } from "../../../app/services/toastService";
 import { gradeService } from "../services/gradeService";
 import { gradeKeys } from "./useGrades";
 import type { CreateGradeRequest } from "../types/grade";
+import { sectionKeys } from "../../sections/hooks/sectionKeys";
+import { studentKeys } from "../../student/hooks/studentKeys";
 
 interface UpdateGradeVariables {
   id: number;
@@ -24,6 +26,9 @@ export function useUpdateGrade() {
       queryClient.invalidateQueries({
         queryKey: gradeKeys.detail(variables.id),
       });
+
+      queryClient.invalidateQueries({ queryKey: sectionKeys.all });
+      queryClient.invalidateQueries({ queryKey: studentKeys.all });
 
       toastService.success(response.message || "Grade updated successfully.");
     },

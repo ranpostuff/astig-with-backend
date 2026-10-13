@@ -31,13 +31,31 @@ export const studentService = {
     const name = params.name?.toLowerCase().trim();
     records = records.filter((student) => {
       const fullName = `${student.firstName} ${student.middleName || ""} ${student.lastName}`.toLowerCase();
-      return (!name || fullName.includes(name)) && (!params.sectionName || student.sectionName === params.sectionName) && (!params.grade || student.gradeName === params.grade) && (!params.parentEmail || student.parentEmail?.includes(params.parentEmail)) && (!params.parentMobileNumber || student.parentMobileNo.includes(params.parentMobileNumber));
+      return (!name || fullName.includes(name) || student.lrn.includes(name)) &&
+        (!params.sectionId || Number(student.sectionId) === Number(params.sectionId)) &&
+        (!params.sectionName || student.sectionName === params.sectionName) &&
+        (!params.gradeId || Number(student.gradeId) === Number(params.gradeId)) &&
+        (!params.grade || student.gradeName === params.grade) &&
+        (!params.parentEmail || student.parentEmail?.includes(params.parentEmail)) &&
+        (!params.parentMobileNumber || student.parentMobileNo.includes(params.parentMobileNumber));
     }).sort((a, b) => a.lastName.localeCompare(b.lastName));
     const totalCount = records.length;
     const start = (params.pageNumber - 1) * params.pageSize;
     const page = records.slice(start, start + params.pageSize);
     return {
-      results: page.map((student) => ({ id: student.id, firstName: student.firstName, middleName: student.middleName, lastName: student.lastName, extension: student.extension, studentPicUrl: student.studentPicUrl, sectionName: student.sectionName, gradeName: student.gradeName })),
+      results: page.map((student) => ({
+        id: student.id,
+        lrn: student.lrn,
+        firstName: student.firstName,
+        middleName: student.middleName,
+        lastName: student.lastName,
+        extension: student.extension,
+        studentPicUrl: student.studentPicUrl,
+        sectionId: student.sectionId,
+        sectionName: student.sectionName,
+        gradeId: student.gradeId,
+        gradeName: student.gradeName,
+      })),
       pageNumber: params.pageNumber,
       pageSize: params.pageSize,
       totalCount,
@@ -53,6 +71,8 @@ export const studentService = {
   },
 
   async create(request: CreateStudentRequest) {
+    const duplicate = await get(ref(firebaseDatabase, `students/${request.lrn}`));
+    if (duplicate.exists()) throw new Error("A student with this LRN already exists.");
     const section = await sectionInfo(request.sectionId);
     const now = Date.now();
     const record: FirebaseStudentRecord = {
@@ -67,6 +87,10 @@ export const studentService = {
 
   async update(id: number, request: UpdateStudentRequest) {
     const existing = await this.getById(id);
+    if (String(id) !== request.lrn) {
+      const duplicate = await get(ref(firebaseDatabase, `students/${request.lrn}`));
+      if (duplicate.exists()) throw new Error("A student with this LRN already exists.");
+    }
     const section = await sectionInfo(request.sectionId);
     const record: FirebaseStudentRecord = {
       id: Number(request.lrn), lrn: request.lrn, firstName: request.firstName.trim(), middleName: request.middleName?.trim() || null, lastName: request.lastName.trim(), extension: request.extension?.trim() || null, parentName: request.parentName?.trim() || existing.parentName || null, parentMobileNo: request.parentMobileNo, parentEmail: request.parentEmail?.trim() || null, studentPicUrl: request.studentPicUrl || null, sectionId: section.id, sectionName: section.name, gradeId: section.gradeId, gradeName: section.gradeName, createdAt: new Date(existing.createdDate).getTime(), updatedAt: Date.now(),

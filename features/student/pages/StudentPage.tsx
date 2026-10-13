@@ -35,8 +35,8 @@ export function StudentsPage() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
 
-  const [selectedGrade, setSelectedGrade] = useState("");
-  const [selectedSection, setSelectedSection] = useState("");
+  const [selectedGradeId, setSelectedGradeId] = useState("");
+  const [selectedSectionId, setSelectedSectionId] = useState("");
 
   const [modal, setModal] = useState<ModalType>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -47,8 +47,8 @@ export function StudentsPage() {
     pageNumber,
     pageSize: PAGE_SIZE,
     ...(search ? { name: search } : {}),
-    ...(selectedGrade ? { grade: selectedGrade } : {}),
-    ...(selectedSection ? { sectionName: selectedSection } : {}),
+    ...(selectedGradeId ? { gradeId: Number(selectedGradeId) } : {}),
+    ...(selectedSectionId ? { sectionId: Number(selectedSectionId) } : {}),
   };
 
   const { data, isLoading, isFetching } = useStudents(params);
@@ -62,9 +62,9 @@ export function StudentsPage() {
     {
       pageNumber: 1,
       pageSize: SECTION_LOOKUP_PAGE_SIZE,
-      ...(selectedGrade ? { gradeName: selectedGrade } : {}),
+      ...(selectedGradeId ? { gradeId: Number(selectedGradeId) } : {}),
     },
-    Boolean(selectedGrade),
+    Boolean(selectedGradeId),
   );
 
   const selectedStudentId = selectedStudent?.id ?? 0;
@@ -89,25 +89,25 @@ export function StudentsPage() {
   function handleClearSearch() {
     setSearchInput("");
     setSearch("");
-    setSelectedGrade("");
-    setSelectedSection("");
+    setSelectedGradeId("");
+    setSelectedSectionId("");
     setPageNumber(1);
   }
 
   function handleGradeChange(event: React.ChangeEvent<HTMLSelectElement>) {
     const grade = event.target.value;
 
-    setSelectedGrade(grade);
+    setSelectedGradeId(grade);
 
     // A section belongs to a grade, so changing the grade
     // should always clear the currently selected section.
-    setSelectedSection("");
+    setSelectedSectionId("");
 
     setPageNumber(1);
   }
 
   function handleSectionChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedSection(event.target.value);
+    setSelectedSectionId(event.target.value);
     setPageNumber(1);
   }
 
@@ -245,7 +245,7 @@ export function StudentsPage() {
 
           {/* Grade Filter */}
           <select
-            value={selectedGrade}
+            value={selectedGradeId}
             onChange={handleGradeChange}
             disabled={isGradesLoading}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-rose-700 disabled:cursor-not-allowed disabled:bg-slate-100 lg:w-48"
@@ -255,7 +255,7 @@ export function StudentsPage() {
             </option>
 
             {grades.map((grade) => (
-              <option key={grade.id} value={grade.name}>
+              <option key={grade.id} value={grade.id}>
                 {grade.name}
               </option>
             ))}
@@ -263,13 +263,13 @@ export function StudentsPage() {
 
           {/* Section Filter */}
           <select
-            value={selectedSection}
+            value={selectedSectionId}
             onChange={handleSectionChange}
-            disabled={!selectedGrade || isSectionsLoading}
+            disabled={!selectedGradeId || isSectionsLoading}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-rose-700 disabled:cursor-not-allowed disabled:bg-slate-100 lg:w-48"
           >
             <option value="">
-              {!selectedGrade
+              {!selectedGradeId
                 ? "Select a grade first"
                 : isSectionsLoading
                   ? "Loading sections..."
@@ -277,7 +277,7 @@ export function StudentsPage() {
             </option>
 
             {sections.map((section) => (
-              <option key={section.id} value={section.name}>
+              <option key={section.id} value={section.id}>
                 {section.name}
               </option>
             ))}
@@ -293,7 +293,7 @@ export function StudentsPage() {
           </button>
 
           {/* Clear */}
-          {(search || selectedGrade || selectedSection) && (
+          {(search || selectedGradeId || selectedSectionId) && (
             <button
               type="button"
               onClick={handleClearSearch}

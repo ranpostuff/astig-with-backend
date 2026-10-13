@@ -21,13 +21,16 @@ export function SectionsPage() {
   // Search input values
   const [name, setName] = useState("");
   const [teacherName, setTeacherName] = useState("");
-  const [gradeName, setGradeName] = useState("");
+  const [gradeId, setGradeId] = useState("");
 
   // Values actually used by the API query
-  const [searchParams, setSearchParams] = useState({
+  const [searchParams, setSearchParams] = useState<{
+    name: string;
+    assignedTeacherName: string;
+    gradeId?: number;
+  }>({
     name: "",
     assignedTeacherName: "",
-    gradeName: "",
   });
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -71,7 +74,7 @@ export function SectionsPage() {
     setSearchParams({
       name: name.trim(),
       assignedTeacherName: teacherName.trim(),
-      gradeName: gradeName,
+      ...(gradeId ? { gradeId: Number(gradeId) } : {}),
     });
   };
 
@@ -178,8 +181,8 @@ export function SectionsPage() {
             </label>
 
             <select
-              value={gradeName}
-              onChange={(event) => setGradeName(event.target.value)}
+              value={gradeId}
+              onChange={(event) => setGradeId(event.target.value)}
               disabled={isLoadingGrades}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-rose-700 focus:ring-1 focus:ring-rose-700 disabled:cursor-not-allowed disabled:bg-slate-100"
             >
@@ -188,7 +191,7 @@ export function SectionsPage() {
               </option>
 
               {gradesData?.results.map((grade) => (
-                <option key={grade.id} value={grade.name}>
+                <option key={grade.id} value={grade.id}>
                   {grade.name}
                 </option>
               ))}

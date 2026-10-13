@@ -1,11 +1,14 @@
 export interface Student {
   id: number;
+  lrn: string;
   firstName: string;
   middleName?: string | null;
   lastName: string;
   extension?: string | null;
   studentPicUrl?: string | null;
+  sectionId: number;
   sectionName: string;
+  gradeId: number;
   gradeName: string;
 }
 
@@ -62,7 +65,9 @@ export interface UpdateStudentRequest {
 
 export interface StudentListParams {
   name?: string;
+  sectionId?: number;
   sectionName?: string;
+  gradeId?: number;
   grade?: string;
   parentEmail?: string;
   parentMobileNumber?: string;

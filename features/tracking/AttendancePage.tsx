@@ -4,7 +4,7 @@ import { CalendarDays, Clock3, Loader2, Mail, Search } from "lucide-react";
 import { toastService } from "../../app/services/toastService";
 import { reportService } from "./reportService";
 import { trackingService } from "./trackingService";
-import type { DailyAttendanceRecord, FirebaseStudentRecord } from "./types";
+import type { DailyAttendanceRecord, FirebaseStudentRecord, GradeOption, SectionOption } from "./types";
 
 function formatTime(value?: number | null) {
   if (!value) return "—";
@@ -19,47 +19,54 @@ function formatTime(value?: number | null) {
 export function AttendancePage() {
   const [date, setDate] = useState(trackingService.schoolDateKey());
   const [students, setStudents] = useState<FirebaseStudentRecord[]>([]);
+  const [grades, setGrades] = useState<GradeOption[]>([]);
+  const [sections, setSections] = useState<SectionOption[]>([]);
   const [records, setRecords] = useState<Record<string, DailyAttendanceRecord>>({});
-  const [grade, setGrade] = useState("");
-  const [section, setSection] = useState("");
+  const [gradeId, setGradeId] = useState("");
+  const [sectionId, setSectionId] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [sendingReport, setSendingReport] = useState(false);
 
   useEffect(() => {
-    void trackingService.listStudents().then(setStudents).finally(() => setLoading(false));
+    void Promise.all([
+      trackingService.listStudents(),
+      trackingService.listGrades(),
+      trackingService.listSections(),
+    ]).then(([studentRecords, gradeRecords, sectionRecords]) => {
+      setStudents(studentRecords);
+      setGrades(gradeRecords);
+      setSections(sectionRecords);
+    }).catch((error) => toastService.error(error)).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => trackingService.subscribeAttendance(date, setRecords), [date]);
 
-  const grades = useMemo(
-    () => Array.from(new Set(students.map((student) => student.gradeName))).sort(),
-    [students],
-  );
-  const sections = useMemo(
-    () => Array.from(new Set(students.filter((student) => !grade || student.gradeName === grade).map((student) => student.sectionName))).sort(),
-    [students, grade],
+  const availableSections = useMemo(
+    () => sections.filter((section) => !gradeId || String(section.gradeId) === gradeId),
+    [sections, gradeId],
   );
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
     return students.filter((student) => {
       const name = `${student.lastName}, ${student.firstName} ${student.middleName || ""}`.toLowerCase();
-      return (!grade || student.gradeName === grade) && (!section || student.sectionName === section) && (!term || name.includes(term) || student.lrn.includes(term));
+      return (!gradeId || String(student.gradeId) === gradeId) &&
+        (!sectionId || String(student.sectionId) === sectionId) &&
+        (!term || name.includes(term) || student.lrn.includes(term));
     });
-  }, [students, grade, section, search]);
+  }, [students, gradeId, sectionId, search]);
   const present = rows.filter((student) => records[student.lrn]).length;
   const late = rows.filter((student) => records[student.lrn]?.late).length;
-  const selectedSectionId = section
-    ? students.find((student) => student.gradeName === grade && student.sectionName === section)?.sectionId
-    : undefined;
+  const selectedGrade = grades.find((grade) => String(grade.id) === gradeId);
+  const selectedSection = sections.find((section) => String(section.id) === sectionId);
 
   async function handleSendReport() {
     setSendingReport(true);
     try {
       const result = await reportService.sendAttendanceNow({
         dateKey: date,
-        ...(grade ? { gradeName: grade } : {}),
-        ...(selectedSectionId ? { sectionId: selectedSectionId } : {}),
+        ...(selectedGrade ? { gradeName: selectedGrade.name } : {}),
+        ...(selectedSection ? { sectionId: selectedSection.id } : {}),
       });
       if (!result.sent) {
         throw new Error(result.skipped[0] || "No adviser email was available for the selected attendance view.");
@@ -101,10 +108,10 @@ export function AttendancePage() {
           <div className="relative mt-2"><CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3" /></div>
         </label>
         <label className="text-sm font-medium text-slate-700">Grade level
-          <select value={grade} onChange={(event) => { setGrade(event.target.value); setSection(""); }} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"><option value="">All grade levels</option>{grades.map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={gradeId} onChange={(event) => { setGradeId(event.target.value); setSectionId(""); }} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"><option value="">All grade levels</option>{grades.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
         </label>
         <label className="text-sm font-medium text-slate-700">Section
-          <select value={section} onChange={(event) => setSection(event.target.value)} disabled={!grade} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100"><option value="">{grade ? "All sections" : "Select a grade first"}</option>{sections.map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={sectionId} onChange={(event) => setSectionId(event.target.value)} disabled={!gradeId} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100"><option value="">{gradeId ? "All sections" : "Select a grade first"}</option>{availableSections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
         </label>
         <label className="text-sm font-medium text-slate-700">Search
           <div className="relative mt-2"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or LRN" className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3" /></div>

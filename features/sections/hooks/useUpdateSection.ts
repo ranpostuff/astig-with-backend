@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { sectionService } from "../services/sectionService";
 import { sectionKeys } from "./sectionKeys";
 import type { UpdateSectionRequest } from "../types/section";
+import { studentKeys } from "../../student/hooks/studentKeys";
 
 interface UpdateSectionVariables {
   id: number;
@@ -22,6 +23,10 @@ export function useUpdateSection() {
 
       queryClient.invalidateQueries({
         queryKey: sectionKeys.detail(variables.id),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: studentKeys.all,
       });
     },
   });

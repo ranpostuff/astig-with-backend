@@ -1,7 +1,6 @@
 import logoDark from "./logo-dark.svg";
 import logoLight from "./logo-light.svg";
 
-console.log(import.meta.env.VITE_API_BASE_URL);
 export function Welcome() {
   return (
     <main className="flex items-center justify-center pt-16 pb-4">

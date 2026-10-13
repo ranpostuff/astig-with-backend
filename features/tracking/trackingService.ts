@@ -13,8 +13,10 @@ import { firebaseAuth, firebaseDatabase } from "../../lib/firebase";
 import type {
   DailyAttendanceRecord,
   FirebaseStudentRecord,
+  GradeOption,
   ImportSummary,
   ScanResult,
+  SectionOption,
   StudentImportRow,
   ViolationRecord,
 } from "./types";
@@ -115,10 +117,20 @@ export const trackingService = {
     );
   },
 
+  async listGrades() {
+    const snapshot = await get(ref(firebaseDatabase, "grades"));
+    if (!snapshot.exists()) return [] as GradeOption[];
+    return Object.values(snapshot.val() as Record<string, GradeOption>).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true }),
+    );
+  },
+
   async listSections() {
     const snapshot = await get(ref(firebaseDatabase, "sections"));
-    if (!snapshot.exists()) return [] as Array<Record<string, unknown>>;
-    return Object.values(snapshot.val() as Record<string, Record<string, unknown>>);
+    if (!snapshot.exists()) return [] as SectionOption[];
+    return Object.values(snapshot.val() as Record<string, SectionOption>).sort((a, b) =>
+      a.gradeName.localeCompare(b.gradeName, undefined, { numeric: true }) || a.name.localeCompare(b.name),
+    );
   },
 
   subscribeAttendance(
@@ -318,9 +330,10 @@ export const trackingService = {
     rows: StudentImportRow[],
     target: { gradeId: number; gradeName: string; sectionId: number; sectionName: string },
   ): Promise<ImportSummary> {
-    const [sectionSnapshot, gradeSnapshot] = await Promise.all([
+    const [sectionSnapshot, gradeSnapshot, studentsSnapshot] = await Promise.all([
       get(ref(firebaseDatabase, `sections/${target.sectionId}`)),
       get(ref(firebaseDatabase, `grades/${target.gradeId}`)),
+      get(ref(firebaseDatabase, "students")),
     ]);
     if (!gradeSnapshot.exists()) throw new Error("The selected grade no longer exists.");
     if (!sectionSnapshot.exists()) throw new Error("The selected section no longer exists.");
@@ -329,6 +342,11 @@ export const trackingService = {
       throw new Error("The selected section does not belong to the selected grade.");
     }
     const updates: Record<string, unknown> = {};
+    const usedLrns = new Set(
+      studentsSnapshot.exists()
+        ? Object.keys(studentsSnapshot.val() as Record<string, FirebaseStudentRecord>)
+        : [],
+    );
     const summary: ImportSummary = {
       imported: 0,
       createdSections: 0,
@@ -344,6 +362,10 @@ export const trackingService = {
       }
       if (!row.studentName?.trim()) {
         summary.skipped.push({ row: index + 2, reason: "Student name is missing." });
+        continue;
+      }
+      if (usedLrns.has(lrn)) {
+        summary.skipped.push({ row: index + 2, reason: "This LRN already exists or is duplicated in the file." });
         continue;
       }
 
@@ -386,6 +408,7 @@ export const trackingService = {
         parentMobileNo: "",
         parentEmail: null,
       } satisfies FirebaseStudentRecord;
+      usedLrns.add(lrn);
       summary.imported += 1;
     }
 
