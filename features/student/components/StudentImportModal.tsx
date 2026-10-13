@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { FileSpreadsheet, Upload, X } from "lucide-react";
 import * as XLSX from "xlsx";
+import { parseStudentWorkbook } from "../studentImport";
 
 import { trackingService } from "../../tracking/trackingService";
 import type { StudentImportRow } from "../../tracking/types";
@@ -13,28 +14,6 @@ type Props = {
   onClose: () => void;
   onImported: () => void;
 };
-
-type RawRow = Record<string, unknown>;
-
-function pick(row: RawRow, names: string[]) {
-  const entries = Object.entries(row);
-  const match = entries.find(([key]) =>
-    names.includes(key.trim().toLowerCase().replace(/[^a-z0-9]/g, "")),
-  );
-  return match?.[1] == null ? "" : String(match[1]).trim();
-}
-
-function mapRow(row: RawRow): StudentImportRow {
-  return {
-    studentName: pick(row, ["nameofstudent", "studentname", "name"]),
-    parentName: pick(row, ["nameofparent", "parentname", "guardianname"]),
-    parentEmail: pick(row, ["emailaddress", "email", "parentemail"]),
-    parentPhone: pick(row, ["phonenoparent", "parentphone", "parentmobileno", "phone"]),
-    lrn: pick(row, ["lrn", "learnerreferencenumber"]),
-    grade: pick(row, ["grade", "gradelevel"]),
-    section: pick(row, ["section", "sectionname"]),
-  };
-}
 
 export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
   const [rows, setRows] = useState<StudentImportRow[]>([]);
@@ -66,9 +45,7 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
     if (!file) return;
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const parsed = XLSX.utils.sheet_to_json<RawRow>(firstSheet, { defval: "" });
-      const mapped = parsed.map(mapRow).filter((row) => row.studentName || row.lrn);
+      const mapped = parseStudentWorkbook(workbook);
       setRows(mapped);
       setFileName(file.name);
       if (!mapped.length) throw new Error("No student rows were found in the first worksheet.");
@@ -119,7 +96,7 @@ export function StudentImportModal({ isOpen, onClose, onImported }: Props) {
         <div className="flex items-start justify-between border-b border-slate-200 p-6">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Import students from Excel</h2>
-            <p className="mt-1 text-sm text-slate-500">Choose a file, then select an existing grade and section for every student in it.</p>
+            <p className="mt-1 text-sm text-slate-500">Choose a file, then select an existing grade and section. Name of Student and LRN are required. Email is optional. Columns may be in any order; title rows and extra columns are ignored.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close">
             <X className="h-5 w-5" />

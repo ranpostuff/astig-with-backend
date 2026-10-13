@@ -101,7 +101,9 @@ function parseStudentName(value: string) {
 
 async function getStudent(lrn: string) {
   const snapshot = await get(ref(firebaseDatabase, `studentDirectory/${lrn}`));
-  return snapshot.exists() ? (snapshot.val() as FirebaseStudentRecord) : null;
+  if (!snapshot.exists()) return null;
+  const student = snapshot.val() as FirebaseStudentRecord & { profilePictureUrl?: string; studentProfilePic?: string };
+  return { ...student, studentPicUrl: student.studentPicUrl || student.profilePictureUrl || student.studentProfilePic || null };
 }
 
 export const trackingService = {
@@ -357,15 +359,15 @@ export const trackingService = {
     for (const [index, row] of rows.entries()) {
       const lrn = String(row.lrn || "").replace(/\D/g, "");
       if (!/^\d{12}$/.test(lrn)) {
-        summary.skipped.push({ row: index + 2, reason: "LRN must contain 12 digits." });
+        summary.skipped.push({ row: row.sourceRow || index + 2, reason: "LRN must contain 12 digits." });
         continue;
       }
       if (!row.studentName?.trim()) {
-        summary.skipped.push({ row: index + 2, reason: "Student name is missing." });
+        summary.skipped.push({ row: row.sourceRow || index + 2, reason: "Student name is missing." });
         continue;
       }
       if (usedLrns.has(lrn)) {
-        summary.skipped.push({ row: index + 2, reason: "This LRN already exists or is duplicated in the file." });
+        summary.skipped.push({ row: row.sourceRow || index + 2, reason: "This LRN already exists or is duplicated in the file." });
         continue;
       }
 

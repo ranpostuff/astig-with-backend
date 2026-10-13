@@ -42,6 +42,7 @@ export function VerificationResult({ student }: VerificationResultProps) {
       </div>
 
       <StudentAvatar
+        key={`${student.id}:${student.studentProfilePic || "initials"}`}
         firstName={student.firstName}
         lastName={student.lastName}
         profilePicture={student.studentProfilePic}

@@ -1,4 +1,5 @@
 import { UserRound } from "lucide-react";
+import { useState } from "react";
 
 type StudentAvatarProps = {
   firstName: string;
@@ -15,11 +16,13 @@ export function StudentAvatar({
   lastName,
   profilePicture,
 }: StudentAvatarProps) {
-  if (profilePicture) {
+  const [failedPicture, setFailedPicture] = useState<string | null>(null);
+  if (profilePicture && failedPicture !== profilePicture) {
     return (
       <div className="h-36 w-36 overflow-hidden rounded-3xl border-4 border-white/70 bg-white shadow-xl">
         <img
           src={profilePicture}
+          onError={() => setFailedPicture(profilePicture)}
           alt={`${firstName} ${lastName}`}
           className="h-full w-full object-cover"
         />

@@ -61,6 +61,7 @@ export interface ViolationRecord {
 }
 
 export interface StudentImportRow {
+  sourceRow?: number;
   lrn: string;
   studentName: string;
   parentName?: string;

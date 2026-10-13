@@ -9,8 +9,7 @@ export const createTeacherSchema = z.object({
 
   password: z
     .string()
-    .min(1, "Password is required.")
-    .min(8, "Password must be at least 8 characters."),
+    .refine((value) => !value || value.length >= 8, "Password must be at least 8 characters when provided."),
 
   firstName: z.string().trim().min(1, "First name is required."),
 

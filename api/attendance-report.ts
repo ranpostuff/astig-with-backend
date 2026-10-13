@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
+import { attendanceWorkbook } from "../lib/server/attendanceWorkbook.js";
 
 const TIME_ZONE = "Asia/Manila";
 const DEPLOYMENT_VERSION = "brevo-attendance-api-2026-10-13.2";
@@ -80,10 +81,6 @@ function formatTime(timestamp?: number | null) {
   }).format(new Date(timestamp));
 }
 
-function csvCell(value: unknown) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
-
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -102,7 +99,7 @@ async function sendEmail(input: {
   subject: string;
   html: string;
   filename: string;
-  csv: string;
+  attachment: Buffer;
 }) {
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
@@ -121,7 +118,7 @@ async function sendEmail(input: {
       htmlContent: input.html,
       attachment: [{
         name: input.filename,
-        content: Buffer.from(input.csv, "utf8").toString("base64"),
+        content: input.attachment.toString("base64"),
       }],
       tags: ["astig-attendance"],
     }),
@@ -188,10 +185,8 @@ async function sendReports(input: ReportRequest & { teacherId?: string; schedule
           remarks: !record?.entryAt ? "ABSENT" : record.late ? "LATE" : "ON TIME",
         };
       });
-    const csv = [
-      ["Student", "LRN", "Entry Time", "Exit Time", "Remarks"].map(csvCell).join(","),
-      ...rows.map((row) => [row.student, row.lrn, row.entry, row.exit, row.remarks].map(csvCell).join(",")),
-    ].join("\r\n");
+    const lateRows = rows.filter(row => row.remarks === "LATE");
+    const lateSummary = `<h3>The following students are late:</h3>${lateRows.length ? `<ol>${lateRows.map(row => `<li>${escapeHtml(row.student)}</li>`).join("")}</ol>` : "<p>No late students.</p>"}`;
     const bodyRows = rows.map((row) => `<tr><td>${escapeHtml(row.student)}</td><td>${escapeHtml(row.entry)}</td><td>${escapeHtml(row.exit)}</td><td><strong>${escapeHtml(row.remarks)}</strong></td></tr>`).join("");
     const adviserName = [teacher.firstName, teacher.middleName, teacher.lastName].filter(Boolean).join(" ");
     const html = `<div style="font-family:Arial,sans-serif;color:#1e293b"><h2 style="color:#881337">ASTIG Attendance Report</h2><p>Good day, ${escapeHtml(adviserName || "Teacher")}.</p><p><strong>${escapeHtml(section.gradeName)} – ${escapeHtml(section.name)}</strong><br>Date: ${escapeHtml(dateKey)}</p><table style="border-collapse:collapse;width:100%"><thead><tr style="background:#881337;color:#fff"><th style="padding:8px;text-align:left">Student</th><th style="padding:8px;text-align:left">Entry</th><th style="padding:8px;text-align:left">Exit</th><th style="padding:8px;text-align:left">Remarks</th></tr></thead><tbody>${bodyRows || '<tr><td colspan="4" style="padding:12px">No students are assigned to this section.</td></tr>'}</tbody></table><p style="font-size:12px;color:#64748b">Generated automatically by ASTIG.</p></div>`;
@@ -199,9 +194,9 @@ async function sendReports(input: ReportRequest & { teacherId?: string; schedule
       const emailResponse = await sendEmail({
         to: teacher.email,
         subject: `ASTIG Attendance – ${section.gradeName} ${section.name} – ${dateKey}`,
-        html,
-        filename: `ASTIG-${section.gradeName}-${section.name}-${dateKey}.csv`.replace(/[^a-zA-Z0-9._-]+/g, "-"),
-        csv,
+        html: html.replace('<p style="font-size:12px', `${lateSummary}<p style="font-size:12px`),
+        filename: `ASTIG-${section.gradeName}-${section.name}-${dateKey}.xlsx`.replace(/[^a-zA-Z0-9._-]+/g, "-"),
+        attachment: await attendanceWorkbook(rows, `${section.gradeName} – ${section.name}`, dateKey),
       });
       result.sent += 1;
       if (emailResponse.id) result.emailIds.push(emailResponse.id);

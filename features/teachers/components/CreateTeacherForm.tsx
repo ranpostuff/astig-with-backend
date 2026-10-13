@@ -196,13 +196,14 @@ export function CreateTeacherForm({
           />
 
           <FormField
-            label="Password"
+            label="Password (optional)"
             type="password"
             registration={register("password")}
             error={errors.password?.message}
             disabled={isPending}
           />
         </div>
+        <p className="mt-3 text-sm text-slate-500">Leave the password blank to email the teacher a link to set their own password. Their email address is required for login and attendance reports.</p>
       </section>
 
       {/* Personal Information */}

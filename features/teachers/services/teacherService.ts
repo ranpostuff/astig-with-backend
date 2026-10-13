@@ -4,10 +4,12 @@ import {
   deleteUser,
   getAuth,
   signOut,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { get, ref, update as updateDatabase } from "firebase/database";
 
 import { firebaseConfig, firebaseDatabase } from "../../../lib/firebase";
+import { toastService } from "../../../app/services/toastService";
 import type {
   CreateTeacherRequest,
   Teacher,
@@ -72,7 +74,7 @@ export const teacherService = {
     const credential = await createUserWithEmailAndPassword(
       secondaryAuth,
       request.email.trim().toLowerCase(),
-      request.password,
+      request.password || Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("") + "aA1!",
     );
     const now = Date.now();
     const teacher: TeacherRecord = {
@@ -111,6 +113,13 @@ export const teacherService = {
       await signOut(secondaryAuth).catch(() => undefined);
     }
 
+    if (!request.password) {
+      try {
+        await sendPasswordResetEmail(secondaryAuth, teacher.email);
+      } catch {
+        toastService.error("Teacher created, but the password setup email could not be sent. Use Firebase Authentication to send a password reset email before they log in.");
+      }
+    }
     return teacher;
   },
 
