@@ -20,6 +20,7 @@
     "axios": "^1.19.0",
     "clsx": "^2.1.1",
     "firebase": "^12.4.0",
+    "firebase-admin": "^13.10.0",
     "html5-qrcode": "^2.3.8",
     "isbot": "^5.1.36",
     "jsbarcode": "^3.12.3",

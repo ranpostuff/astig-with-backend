@@ -1,6 +1,4 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
-
-import { firebaseApp } from "../../lib/firebase";
+import { firebaseAuth } from "../../lib/firebase";
 
 type ReportRequest = {
   dateKey: string;
@@ -14,12 +12,20 @@ type ReportResult = {
   emailIds: string[];
 };
 
-const functions = getFunctions(firebaseApp, "asia-southeast1");
-const sendReport = httpsCallable<ReportRequest, ReportResult>(functions, "sendAttendanceReportNow");
-
 export const reportService = {
   async sendAttendanceNow(request: ReportRequest) {
-    const response = await sendReport(request);
-    return response.data;
+    const token = await firebaseAuth.currentUser?.getIdToken();
+    if (!token) throw new Error("Sign in before sending an attendance report.");
+    const response = await fetch("/api/attendance-report", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+    const result = await response.json() as ReportResult & { error?: string };
+    if (!response.ok) throw new Error(result.error || "Unable to send attendance report.");
+    return result;
   },
 };
