@@ -53,10 +53,11 @@ function isLate(timestamp: number) {
   return hour > LATE_HOUR || (hour === LATE_HOUR && minute >= LATE_MINUTE);
 }
 
-async function reliableTimestamp() {
-  const offsetSnapshot = await get(ref(firebaseDatabase, ".info/serverTimeOffset"));
-  const offset = offsetSnapshot.exists() ? Number(offsetSnapshot.val()) : 0;
-  return Date.now() + (Number.isFinite(offset) ? offset : 0);
+function reliableTimestamp() {
+  // Avoid reading Firebase's reserved `.info/serverTimeOffset` location here.
+  // Some transports submit it as a normal server path, which is rejected as
+  // "Invalid token in path". Rules already allow a small clock tolerance.
+  return Date.now();
 }
 
 function fullName(student: FirebaseStudentRecord) {
@@ -149,7 +150,7 @@ export const trackingService = {
     const student = await getStudent(lrn);
     if (!student) throw new Error(`No student was found for LRN ${lrn}.`);
 
-    const timestamp = await reliableTimestamp();
+    const timestamp = reliableTimestamp();
     const dateKey = schoolDateParts(timestamp).dateKey;
     let action: "ENTRY" | "EXIT" = "ENTRY";
     let duplicateScan = false;

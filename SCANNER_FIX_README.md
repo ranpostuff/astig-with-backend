@@ -1,19 +1,14 @@
-# ASTIG scanner network and path fix
+# ASTIG scanner definitive path fix
 
-Copy these files over the matching paths in the repository, commit, and push.
+Copy these files over the matching repository paths, commit, and push.
 
-This update:
+The scan flow no longer requests Firebase's reserved
+`.info/serverTimeOffset` location. That leading-dot path was being rejected by
+the deployed Realtime Database transport as `Invalid token in path` before an
+attendance record could be written.
 
-- accepts only the Firebase Realtime Database origin and removes accidental
-  Firebase Console suffixes such as `/null` or `/:null`;
-- forces Firebase HTTPS long polling so school networks, VPNs, and proxies that
-  reject WebSockets do not break kiosk/mobile synchronization;
-- sanitizes QR contents down to a valid 12-digit LRN.
+This package also retains the database URL normalization, 12-digit LRN
+sanitization, and HTTPS long-polling compatibility fixes.
 
-Keep this Vercel Production environment variable:
-
-`VITE_FIREBASE_DATABASE_URL=https://astig-backend-default-rtdb.asia-southeast1.firebasedatabase.app`
-
-After Vercel deploys the commit, open the newest deployment, use
-`Ctrl+Shift+R`, and scan again. Turning off the browser VPN for the site is also
-recommended.
+After Vercel deploys the commit, open the newest deployment, hard-refresh the
+kiosk with `Ctrl+Shift+R`, and scan again.
