@@ -3,19 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
 
 const TIME_ZONE = "Asia/Manila";
-const DEPLOYMENT_VERSION = "brevo-attendance-api-2026-10-13.1";
-
-type RequestLike = {
-  method?: string;
-  headers: Record<string, string | string[] | undefined>;
-  body?: unknown;
-};
-
-type ResponseLike = {
-  status(code: number): ResponseLike;
-  json(value: unknown): void;
-  setHeader(name: string, value: string): void;
-};
+const DEPLOYMENT_VERSION = "brevo-attendance-api-2026-10-13.2";
 
 type SectionRecord = {
   id: number;
@@ -107,12 +95,6 @@ function escapeHtml(value: unknown) {
 
 function studentName(student: StudentRecord) {
   return [student.lastName + ",", student.firstName, student.middleName, student.extension].filter(Boolean).join(" ");
-}
-
-function requestBody(body: unknown): ReportRequest {
-  if (!body) return {};
-  if (typeof body === "string") return JSON.parse(body) as ReportRequest;
-  return body as ReportRequest;
 }
 
 async function sendEmail(input: {
@@ -249,41 +231,54 @@ async function sendReports(input: ReportRequest & { teacherId?: string; schedule
   return result;
 }
 
-export default async function handler(request: RequestLike, response: ResponseLike) {
-  response.setHeader("Cache-Control", "no-store");
-  response.setHeader("X-ASTIG-Deployment", DEPLOYMENT_VERSION);
+function jsonResponse(value: unknown, status = 200) {
+  return Response.json(value, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "X-ASTIG-Deployment": DEPLOYMENT_VERSION,
+    },
+  });
+}
+
+export async function GET(request: Request) {
   try {
     initializeFirebaseAdmin();
-    const authorization = Array.isArray(request.headers.authorization)
-      ? request.headers.authorization[0]
-      : request.headers.authorization;
-
-    if (request.method === "GET") {
-      if (!process.env.CRON_SECRET || authorization !== `Bearer ${process.env.CRON_SECRET}`) {
-        return response.status(401).json({ error: "Unauthorized cron request." });
-      }
-      const result = await sendReports({ dateKey: schoolDateKey(), scheduled: true });
-      return response.status(200).json(result);
+    const authorization = request.headers.get("authorization");
+    if (!process.env.CRON_SECRET || authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+      return jsonResponse({ error: "Unauthorized cron request." }, 401);
     }
+    const result = await sendReports({ dateKey: schoolDateKey(), scheduled: true });
+    return jsonResponse(result);
+  } catch (error) {
+    console.error(error);
+    return jsonResponse({ error: error instanceof Error ? error.message : "Unable to send attendance reports." }, 500);
+  }
+}
 
-    if (request.method !== "POST") return response.status(405).json({ error: "Method not allowed." });
-    if (!authorization?.startsWith("Bearer ")) return response.status(401).json({ error: "Sign in before sending a report." });
+export async function POST(request: Request) {
+  try {
+    initializeFirebaseAdmin();
+    const authorization = request.headers.get("authorization");
+    if (!authorization?.startsWith("Bearer ")) return jsonResponse({ error: "Sign in before sending a report." }, 401);
 
     const token = await getAuth().verifyIdToken(authorization.slice(7));
     const roleSnapshot = await getDatabase().ref(`users/${token.uid}/role`).get();
     const role = String(roleSnapshot.val() || "");
     const isAdmin = token.admin === true || role === "admin";
     const isTeacher = token.teacher === true || role === "teacher";
-    if (!isAdmin && !isTeacher) return response.status(403).json({ error: "Only administrators and teachers may send reports." });
+    if (!isAdmin && !isTeacher) return jsonResponse({ error: "Only administrators and teachers may send reports." }, 403);
+
+    const body = await request.json().catch(() => ({})) as ReportRequest;
 
     const result = await sendReports({
-      ...requestBody(request.body),
+      ...body,
       teacherId: isAdmin ? undefined : token.uid,
       scheduled: false,
     });
-    return response.status(200).json(result);
+    return jsonResponse(result);
   } catch (error) {
     console.error(error);
-    return response.status(500).json({ error: error instanceof Error ? error.message : "Unable to send attendance reports." });
+    return jsonResponse({ error: error instanceof Error ? error.message : "Unable to send attendance reports." }, 500);
   }
 }
