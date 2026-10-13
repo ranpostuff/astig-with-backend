@@ -120,28 +120,32 @@ async function sendEmail(input: {
   html: string;
   filename: string;
   csv: string;
-  idempotencyKey?: string;
 }) {
-  const response = await fetch("https://api.resend.com/emails", {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${requiredEnvironment("RESEND_API_KEY")}`,
+      Accept: "application/json",
+      "api-key": requiredEnvironment("BREVO_API_KEY"),
       "Content-Type": "application/json",
-      ...(input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : {}),
     },
     body: JSON.stringify({
-      from: requiredEnvironment("RESEND_FROM_EMAIL"),
-      to: [input.to],
+      sender: {
+        name: requiredEnvironment("BREVO_FROM_NAME"),
+        email: requiredEnvironment("BREVO_FROM_EMAIL"),
+      },
+      to: [{ email: input.to }],
       subject: input.subject,
-      html: input.html,
-      attachments: [{
-        filename: input.filename,
+      htmlContent: input.html,
+      attachment: [{
+        name: input.filename,
         content: Buffer.from(input.csv, "utf8").toString("base64"),
       }],
+      tags: ["astig-attendance"],
     }),
   });
-  if (!response.ok) throw new Error(`Resend rejected an email (${response.status}): ${await response.text()}`);
-  return response.json() as Promise<{ id?: string }>;
+  if (!response.ok) throw new Error(`Brevo rejected an email (${response.status}): ${await response.text()}`);
+  const result = await response.json() as { messageId?: string };
+  return { id: result.messageId };
 }
 
 async function mapWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<void>) {
@@ -183,6 +187,11 @@ async function sendReports(input: ReportRequest & { teacherId?: string; schedule
       result.skipped.push(`${section.gradeName} - ${section.name}: adviser email is missing.`);
       return;
     }
+    const deliveryRef = db.ref(`emailReportDeliveries/${dateKey}/${section.id}`);
+    if (input.scheduled && (await deliveryRef.get()).val()?.status === "SENT") {
+      result.skipped.push(`${section.gradeName} - ${section.name}: today's scheduled report was already sent.`);
+      return;
+    }
     const rows = students
       .filter((student) => Number(student.sectionId) === Number(section.id))
       .sort((a, b) => a.lastName.localeCompare(b.lastName))
@@ -203,16 +212,27 @@ async function sendReports(input: ReportRequest & { teacherId?: string; schedule
     const bodyRows = rows.map((row) => `<tr><td>${escapeHtml(row.student)}</td><td>${escapeHtml(row.entry)}</td><td>${escapeHtml(row.exit)}</td><td><strong>${escapeHtml(row.remarks)}</strong></td></tr>`).join("");
     const adviserName = [teacher.firstName, teacher.middleName, teacher.lastName].filter(Boolean).join(" ");
     const html = `<div style="font-family:Arial,sans-serif;color:#1e293b"><h2 style="color:#881337">ASTIG Attendance Report</h2><p>Good day, ${escapeHtml(adviserName || "Teacher")}.</p><p><strong>${escapeHtml(section.gradeName)} – ${escapeHtml(section.name)}</strong><br>Date: ${escapeHtml(dateKey)}</p><table style="border-collapse:collapse;width:100%"><thead><tr style="background:#881337;color:#fff"><th style="padding:8px;text-align:left">Student</th><th style="padding:8px;text-align:left">Entry</th><th style="padding:8px;text-align:left">Exit</th><th style="padding:8px;text-align:left">Remarks</th></tr></thead><tbody>${bodyRows || '<tr><td colspan="4" style="padding:12px">No students are assigned to this section.</td></tr>'}</tbody></table><p style="font-size:12px;color:#64748b">Generated automatically by ASTIG.</p></div>`;
-    const response = await sendEmail({
-      to: teacher.email,
-      subject: `ASTIG Attendance – ${section.gradeName} ${section.name} – ${dateKey}`,
-      html,
-      filename: `ASTIG-${section.gradeName}-${section.name}-${dateKey}.csv`.replace(/[^a-zA-Z0-9._-]+/g, "-"),
-      csv,
-      idempotencyKey: input.scheduled ? `astig-daily-${dateKey}-${section.id}` : undefined,
-    });
-    result.sent += 1;
-    if (response.id) result.emailIds.push(response.id);
+    try {
+      const emailResponse = await sendEmail({
+        to: teacher.email,
+        subject: `ASTIG Attendance – ${section.gradeName} ${section.name} – ${dateKey}`,
+        html,
+        filename: `ASTIG-${section.gradeName}-${section.name}-${dateKey}.csv`.replace(/[^a-zA-Z0-9._-]+/g, "-"),
+        csv,
+      });
+      result.sent += 1;
+      if (emailResponse.id) result.emailIds.push(emailResponse.id);
+      await deliveryRef.set({
+        status: "SENT",
+        messageId: emailResponse.id || null,
+        recipient: teacher.email,
+        source: input.scheduled ? "VERCEL_CRON" : "MANUAL",
+        sentAt: Date.now(),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Brevo could not send this report.";
+      result.skipped.push(`${section.gradeName} - ${section.name}: ${reason}`);
+    }
   });
 
   await db.ref("reportRuns").push({

@@ -1,45 +1,59 @@
-# ASTIG email setup — Firebase Spark + Vercel Hobby + Resend Free
+# ASTIG email setup — Firebase Spark + Vercel + Brevo Free
 
-The attendance email backend runs as a Vercel Function. Firebase remains on the free Spark plan and is only used for Authentication and Realtime Database.
+The attendance email backend runs as a Vercel Function. Firebase remains on the Spark plan for Authentication and Realtime Database. Brevo sends the transactional attendance reports.
 
-## 1. Replace the exposed Resend key
+## 1. Create and verify the Brevo sender
 
-Revoke any Resend API key that was pasted into chat or committed to a repository. Create a new key and keep it private.
+In Brevo, open **Settings → Senders, Domains & Dedicated IPs → Senders**, then choose **Add a sender**.
 
-## 2. Verify a Resend sending domain
-
-Verify a domain in Resend and prepare a sender such as:
+Use:
 
 ```text
-ASTIG Attendance <attendance@your-school-domain.com>
+From name: ASTIG Attendance
+From email: the email address you can verify
 ```
 
-Resend's `onboarding@resend.dev` sender is suitable only for restricted testing and normally cannot deliver to all adviser addresses.
+Enter the verification code Brevo sends to that address. The email must appear as verified before ASTIG can use it.
 
-## 3. Create a Firebase service-account key
+## 2. Generate a Brevo API key
 
-Open Firebase Console → Project settings → Service accounts → Generate new private key. Download the JSON file and do not upload it to GitHub.
+Open **Settings → SMTP & API → API Keys**, generate a key named `ASTIG Vercel`, and copy it immediately. Do not upload it to GitHub or paste it into client-side code.
 
-## 4. Add Vercel environment variables
+Use an API key, not an SMTP key.
 
-Open Vercel → ASTIG project → Settings → Environment Variables. Add these to Production:
+## 3. Firebase service-account credentials
+
+The existing Firebase Admin variables are still required by the Vercel Function. If the previous service-account private key was exposed, revoke it in Google Cloud IAM and generate a replacement from Firebase Console → Project settings → Service accounts.
+
+## 4. Vercel environment variables
+
+Open Vercel → ASTIG project → Settings → Environment Variables. Add these to **Production**:
 
 | Variable | Value |
 | --- | --- |
-| `RESEND_API_KEY` | New Resend API key |
-| `RESEND_FROM_EMAIL` | `ASTIG Attendance <attendance@your-school-domain.com>` |
-| `FIREBASE_PROJECT_ID` | JSON file's `project_id` |
-| `FIREBASE_CLIENT_EMAIL` | JSON file's `client_email` |
-| `FIREBASE_PRIVATE_KEY` | Entire JSON file `private_key`, including BEGIN/END lines |
+| `BREVO_API_KEY` | Brevo API key beginning with `xkeysib-` |
+| `BREVO_FROM_EMAIL` | The exact verified sender email from Brevo |
+| `BREVO_FROM_NAME` | `ASTIG Attendance` |
+| `FIREBASE_PROJECT_ID` | Firebase service-account JSON `project_id` |
+| `FIREBASE_CLIENT_EMAIL` | Firebase service-account JSON `client_email` |
+| `FIREBASE_PRIVATE_KEY` | Entire `private_key`, including BEGIN/END lines |
 | `FIREBASE_DATABASE_URL` | `https://astig-backend-default-rtdb.asia-southeast1.firebasedatabase.app` |
-| `CRON_SECRET` | A random secret with at least 32 characters |
+| `CRON_SECRET` | Random secret containing at least 32 characters |
 
-Never prefix these with `VITE_`; that would expose them to the browser.
+Remove the obsolete `RESEND_API_KEY` and `RESEND_FROM_EMAIL` variables after the Brevo deployment works.
 
-## 5. Redeploy
+Never prefix server secrets with `VITE_`, because that would expose them to the browser.
 
-Commit and push the update to GitHub, then redeploy the project in Vercel. Environment-variable changes apply only to new deployments.
+## 5. Deploy and test
 
-The cron route runs once daily at `04:00 UTC`, which corresponds to `12:00 PM` in Asia/Manila. Vercel Hobby may invoke a daily cron at any point during that hour, so delivery can occur between 12:00 and 12:59 PM.
+Commit and push the update to GitHub. In Vercel, wait for the new production deployment to report **Ready**. Environment-variable changes only affect new deployments.
 
-The Attendance page's **Send report now** button calls the same protected Vercel Function using the signed-in administrator or teacher's Firebase ID token.
+Open ASTIG → Attendance, select one grade and section whose adviser email you control, then select **Send report now**. Confirm:
+
+1. ASTIG reports one successful email.
+2. The message arrives with the CSV attachment.
+3. The delivery appears in Brevo → Transactional → Logs.
+
+The automated route runs daily at `04:00 UTC`, which is `12:00 PM` in Asia/Manila. The free Brevo allowance is currently 300 sends per day, so 42 section reports use 42 sends.
+
+Scheduled reports store a successful-delivery marker in Firebase under `emailReportDeliveries/<date>/<sectionId>` so a cron retry does not resend the same section's report. Manual reports remain available for intentional resends.
