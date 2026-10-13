@@ -48,6 +48,8 @@ Never prefix server secrets with `VITE_`, because that would expose them to the 
 
 Commit and push the update to GitHub. In Vercel, wait for the new production deployment to report **Ready**. Environment-variable changes only affect new deployments.
 
+On the completed Vercel deployment, open **Functions** and confirm that `api/attendance-report.ts` is listed. If it is absent, the ZIP contents were copied into a nested folder instead of the repository root. The repository root must directly contain `api`, `app`, `features`, `package.json`, and `vercel.json`.
+
 Open ASTIG → Attendance, select one grade and section whose adviser email you control, then select **Send report now**. Confirm:
 
 1. ASTIG reports one successful email.
